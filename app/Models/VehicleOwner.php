@@ -5,31 +5,23 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Guides extends Model
+class VehicleOwner extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'guideName',
-        'guideNic',
+    protected $filable = [
+        'vehicleOwnerName',
+        'vehicleOwnerNic',
         'businessMail',
         'personalNumber',
         'whatsappNumber',
-        'guideImage',
-        'languages',
         'locations',
         'description',
         'user_id',
-    ];
-    protected $casts = [
-        'guideImage' => 'array',
-        'languages' => 'array',
-        'locations' => 'array',
     ];
 
     public function user()
     {
         return $this->belongsTo(User::class);
     }
-
 }
