@@ -46,4 +46,35 @@ class GuidesController extends Controller
         $guide = Guides::where('user_id', Auth::id())->first();
         return response()->json($guide);
     }
+
+    public function update(Request $request, $id)
+    {
+        $request->validate([
+            'guideName' => 'sometimes|required|string|max:255',
+            'guideNic' => 'sometimes|required|string|max:255',
+            'businessMail' => 'sometimes|required|email',
+            'personalNumber' => 'sometimes|required|string|max:15',
+            'whatsappNumber' => 'nullable|string|max:15',
+            'guideImage' => 'nullable|array',
+            'languages' => 'nullable|array',
+            'locations' => 'nullable|array',
+            'description' => 'nullable|string'
+        ]);
+
+        $guide = Guides::findOrFail($id);
+        $guide->update($request->all());
+
+        return response()->json([
+            'message' => 'Guide updated successfully!',
+            'guide' => $guide
+        ]);
+    }
+
+    public function delete($id)
+    {
+        $guide = Guides::findOrFail($id);
+        $guide->delete();
+
+        return response()->json(['message' => 'Guide deleted successfully!']);
+    }
 }
