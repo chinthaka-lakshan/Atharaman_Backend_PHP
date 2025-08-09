@@ -6,9 +6,11 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use App\Models\Guides;
 use App\Models\ShopOwner;
+use App\Models\HotelOwner;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\GuidesController;
 use App\Http\Controllers\ShopOwnerController;
+use App\Http\Controllers\HotelOwnerController;
 
 Route::post('/login', function (Request $request) {
     $credentials = $request->validate([
@@ -33,6 +35,7 @@ Route::post('/login', function (Request $request) {
 Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('guides', GuidesController::class);
     Route::apiResource('shop-owners', ShopOwnerController::class);
+    Route::apiResource('hotel-owners', HotelOwnerController::class);
 
     Route::get('/user', function (Request $request) {
         return $request->user();
