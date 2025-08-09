@@ -5,7 +5,10 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use App\Models\Guides;
+use App\Models\ShopOwner;
+use App\Http\Controllers\Controller;
 use App\Http\Controllers\GuidesController;
+use App\Http\Controllers\ShopOwnerController;
 
 Route::post('/login', function (Request $request) {
     $credentials = $request->validate([
@@ -28,8 +31,8 @@ Route::post('/login', function (Request $request) {
 
 
 Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/guides', [GuidesController::class, 'store']);
-    Route::get('/guides', [GuidesController::class, 'getGuide']);
+    Route::apiResource('guides', GuidesController::class);
+    Route::apiResource('shop-owners', ShopOwnerController::class);
 
     Route::get('/user', function (Request $request) {
         return $request->user();

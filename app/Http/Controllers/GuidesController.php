@@ -41,12 +41,6 @@ class GuidesController extends Controller
         ]);
     }
 
-    public function getGuide()
-    {
-        $guide = Guides::where('user_id', Auth::id())->first();
-        return response()->json($guide);
-    }
-
     public function update(Request $request, $id)
     {
         $request->validate([
@@ -68,6 +62,17 @@ class GuidesController extends Controller
             'message' => 'Guide updated successfully!',
             'guide' => $guide
         ]);
+    }
+    public function show($id)
+    {
+        $guide = Guides::findOrFail($id);
+        return response()->json($guide);
+    }
+    
+    public function index()
+    {
+        $guides = Guides::all();
+        return response()->json($guides);
     }
 
     public function delete($id)
