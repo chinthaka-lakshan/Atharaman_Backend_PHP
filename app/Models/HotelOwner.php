@@ -16,6 +16,11 @@ class HotelOwner extends Model
         'user_id',
     ];
 
+    public function hotel()
+    {
+        return $this->hasMany(Hotel::class);
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class);

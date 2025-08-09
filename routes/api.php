@@ -8,11 +8,13 @@ use App\Models\Guides;
 use App\Models\ShopOwner;
 use App\Models\HotelOwner;
 use App\Models\VehicleOwner;
+use App\Models\Vehicle;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\GuidesController;
 use App\Http\Controllers\ShopOwnerController;
 use App\Http\Controllers\HotelOwnerController;
 use App\Http\Controllers\VehicleOwnerController;
+use App\Http\Controllers\VehicleController;
 
 Route::post('/login', function (Request $request) {
     $credentials = $request->validate([
@@ -41,6 +43,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('hotel-owners', HotelOwnerController::class);
     Route::apiResource('vehicle-owners', VehicleOwnerController::class);
     Route::get('vehicle-owners/location/{location}', [VehicleOwnerController::class, 'getByLocation']);
+    Route::apiResource('vehicles', VehicleController::class);
+    Route::get('vehicles/location/{location}', [VehicleController::class, 'getByLocation']);
 
 
     Route::get('/user', function (Request $request) {
