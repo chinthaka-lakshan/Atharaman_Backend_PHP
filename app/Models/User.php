@@ -35,6 +35,10 @@ class User extends Authenticatable
     {
         return $this->hasOne(HotelOwner::class);
     }
+    public function vehicleOwner()
+    {
+        return $this->hasOne(VehicleOwner::class);
+    }
 
 
     /**

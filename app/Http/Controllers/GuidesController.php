@@ -75,6 +75,12 @@ class GuidesController extends Controller
         return response()->json($guides);
     }
 
+    public function getByLocation($location)
+    {
+        $guides = Guides::where('locations', 'LIKE', "%{$location}%")->get();
+        return response()->json($guides);
+    }
+
     public function delete($id)
     {
         $guide = Guides::findOrFail($id);
