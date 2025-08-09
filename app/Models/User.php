@@ -22,10 +22,14 @@ class User extends Authenticatable
         'email',
         'password',
     ];
-    
+
     public function guide()
     {
         return $this->hasOne(Guide::class);
+    }
+    public function shopOwner()
+    {
+        return $this->hasOne(ShopOwner::class);
     }
 
 
