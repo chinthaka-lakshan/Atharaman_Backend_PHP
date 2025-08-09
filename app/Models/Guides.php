@@ -21,6 +21,11 @@ class Guides extends Model
         'description',
         'user_id',
     ];
+    protected $casts = [
+        'guideImage' => 'array',
+        'languages' => 'array',
+        'locations' => 'array',
+    ];
 
     public function user()
     {

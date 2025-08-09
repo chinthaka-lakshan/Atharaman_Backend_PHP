@@ -16,11 +16,29 @@ class GuidesController extends Controller
             'businessMail' => 'required|email',
             'personalNumber' => 'required|string|max:15',
             'whatsappNumber' => 'nullable|string|max:15',
-            'guideImage' => 'nullable|array',
+            'guideImage.*'    => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'languages' => 'nullable|array',
             'locations' => 'nullable|array',
             'description' => 'nullable|string'
         ]);
+        $images = [];
+        if ($request->hasFile('guideImage')) {
+            $images = [];
+            foreach ($request->file('guideImage') as $image) {
+                $path = $image->store('guides', 'public'); // saves in storage/app/public/guides
+                $images[] = $path;
+            }
+            $guideImagePaths = json_encode($images);
+        } else {
+            $guideImagePaths = json_encode([]);
+        }
+
+        // if ($request->hasFile('guideImage')) {
+        //     foreach ($request->file('guideImage') as $image) {
+        //         $path = $image->store('images/guides', 'public');
+        //         $images[] = $path;
+        //     }
+        // }
 
         $guide = Guides::create([
             'guideName' => $request->guideName,
@@ -28,7 +46,8 @@ class GuidesController extends Controller
             'businessMail' => $request->businessMail,
             'personalNumber' => $request->personalNumber,
             'whatsappNumber' => $request->whatsappNumber,
-            'guideImage' => json_encode($request->guideImage),
+            'guideImage' => $guideImagePaths,
+            // 'guideImage' => json_encode($request->guideImage),
             'languages' => json_encode($request->languages),
             'locations' => json_encode($request->locations),
             'description' => $request->description,
