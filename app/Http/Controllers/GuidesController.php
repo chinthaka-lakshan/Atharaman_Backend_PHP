@@ -33,13 +33,6 @@ class GuidesController extends Controller
             $guideImagePaths = json_encode([]);
         }
 
-        // if ($request->hasFile('guideImage')) {
-        //     foreach ($request->file('guideImage') as $image) {
-        //         $path = $image->store('images/guides', 'public');
-        //         $images[] = $path;
-        //     }
-        // }
-
         $guide = Guides::create([
             'guideName' => $request->guideName,
             'guideNic' => $request->guideNic,

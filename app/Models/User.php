@@ -39,7 +39,14 @@ class User extends Authenticatable
     {
         return $this->hasOne(VehicleOwner::class);
     }
-
+    public function hotel()
+    {
+        return $this->hasMany(Hotel::class);
+    }
+    public function vehicle()
+    {
+        return $this->hasMany(Vehicle::class);
+    }
 
     /**
      * The attributes that should be hidden for serialization.

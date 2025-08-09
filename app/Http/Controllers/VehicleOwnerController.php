@@ -25,14 +25,20 @@ class VehicleOwnerController extends Controller
             'vehicleOwnerName' => 'required|string|max:255',
             'vehicleOwnerNic' => 'required|string|max:255',
             'businessMail' => 'required|email',
-            'contactNumber' => 'required|string|max:15',
+            'personalNumber' => 'required|string|max:15',
+            'whatsappNumber' => 'nullable|string|max:15',
+            'locations' => 'nullable|array',
+            'description' => 'nullable|string'
         ]);
 
         $vehicleOwner = VehicleOwner::create([
             'vehicleOwnerName' => $request->vehicleOwnerName,
             'vehicleOwnerNic' => $request->vehicleOwnerNic,
             'businessMail' => $request->businessMail,
-            'contactNumber' => $request->contactNumber,
+            'personalNumber' => $request->personalNumber,
+            'whatsappNumber' => $request->whatsappNumber,
+            'locations' => json_encode($request->locations),
+            'description' => $request->description,
             'user_id' => Auth::id(),
         ]);
 
@@ -42,23 +48,6 @@ class VehicleOwnerController extends Controller
         ]);
     }
 
-    public function update(Request $request, $id)
-    {
-        $request->validate([
-            'vehicleOwnerName' => 'sometimes|required|string|max:255',
-            'vehicleOwnerNic' => 'sometimes|required|string|max:255',
-            'businessMail' => 'sometimes|required|email',
-            'contactNumber' => 'sometimes|required|string|max:15',
-        ]);
-
-        $vehicleOwner = VehicleOwner::findOrFail($id);
-        $vehicleOwner->update($request->all());
-
-        return response()->json([
-            'message' => 'Vehicle Owner updated successfully!',
-            'vehicleOwner' => $vehicleOwner
-        ]);
-    }
 
     public function destroy($id)
     {

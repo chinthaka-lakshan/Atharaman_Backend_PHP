@@ -13,16 +13,18 @@ return new class extends Migration
      */
     public function up()
     {
-        Schema::create('vehicle_owners',function (Blueprint $table) {
+        Schema::create('hotel', function (Blueprint $table) {
             $table->id();
-            $table->string('vehicleOwnerName');
-            $table->string('vehicleOwnerNic');
+            $table->string('hotelName');
+            $table->string('hotelAddress');
             $table->string('businessMail');
-            $table->string('personalNumber');
+            $table->string('contactNumber');
             $table->string('whatsappNumber');
+            $table->json('hotelImage')->nullable();
             $table->json('locations')->nullable();
             $table->string('description')->nullable();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->foreignId('hotel_owner_id')->constrained('hotel_owners')->onDelete('cascade');
             $table->timestamps();
         });
     }
@@ -34,6 +36,6 @@ return new class extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists('vehicle_owners');
+        Schema::dropIfExists('hotel');
     }
 };
