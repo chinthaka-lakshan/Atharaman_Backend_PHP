@@ -16,6 +16,10 @@ class ShopOwner extends Model
         'contactNumber',
         'user_id',
     ];
+    public function shop()
+    {
+        return $this->hasMany(Shop::class);
+    }
 
     public function user()
     {
