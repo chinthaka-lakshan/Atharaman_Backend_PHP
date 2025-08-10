@@ -55,20 +55,49 @@ class GuidesController extends Controller
 
     public function update(Request $request, $id)
     {
-        $request->validate([
+        $guide = Guides::findOrFail($id);
+
+        $validated = $request->validate([
             'guideName' => 'sometimes|required|string|max:255',
             'guideNic' => 'sometimes|required|string|max:255',
             'businessMail' => 'sometimes|required|email',
             'personalNumber' => 'sometimes|required|string|max:15',
             'whatsappNumber' => 'nullable|string|max:15',
-            'guideImage' => 'nullable|array',
+            'guideImage' => 'nullable',
+            'guideImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'languages' => 'nullable|array',
             'locations' => 'nullable|array',
             'description' => 'nullable|string'
         ]);
 
-        $guide = Guides::findOrFail($id);
-        $guide->update($request->all());
+        // Handle images (support both single and multiple file upload)
+        $existingImages = json_decode($guide->guideImage, true) ?? [];
+        $newImages = [];
+        if ($request->hasFile('guideImage')) {
+            $files = $request->file('guideImage');
+            // If single file, wrap in array
+            if (!is_array($files)) {
+                $files = [$files];
+            }
+            foreach ($files as $image) {
+                $path = $image->store('guides', 'public');
+                $newImages[] = $path;
+            }
+        }
+        // If new images uploaded, replace, else keep existing
+        $guide->guideImage = count($newImages) > 0 ? json_encode($newImages) : json_encode($existingImages);
+
+        // Update other fields if present
+        if ($request->filled('guideName')) $guide->guideName = $request->guideName;
+        if ($request->filled('guideNic')) $guide->guideNic = $request->guideNic;
+        if ($request->filled('businessMail')) $guide->businessMail = $request->businessMail;
+        if ($request->filled('personalNumber')) $guide->personalNumber = $request->personalNumber;
+        if ($request->filled('whatsappNumber')) $guide->whatsappNumber = $request->whatsappNumber;
+        if ($request->has('languages')) $guide->languages = is_array($request->languages) ? json_encode($request->languages) : $guide->languages;
+        if ($request->has('locations')) $guide->locations = is_array($request->locations) ? json_encode($request->locations) : $guide->locations;
+        if ($request->filled('description')) $guide->description = $request->description;
+
+        $guide->save();
 
         return response()->json([
             'message' => 'Guide updated successfully!',
