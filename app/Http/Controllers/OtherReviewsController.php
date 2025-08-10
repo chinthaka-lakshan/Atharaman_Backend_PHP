@@ -76,4 +76,13 @@ class OtherReviewsController extends Controller
         }
         return response()->json(['message' => 'Other review not found'], 404);
     }
+    public function getReviewsByType($type)
+    {
+        // Logic to retrieve reviews by type (e.g., hotel, restaurant)
+        $reviews = OtherReview::where('type', $type)->get();
+        if ($reviews->isEmpty()) {
+            return response()->json(['message' => 'No reviews found for this type'], 404);
+        }
+        return response()->json($reviews);
+    }
 }
