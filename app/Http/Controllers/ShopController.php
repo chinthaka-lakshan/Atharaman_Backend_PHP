@@ -67,29 +67,33 @@ class ShopController extends Controller
             'shopAddress' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
             'locations' => 'nullable|array',
+            'shopImage' => 'nullable',
             'shopImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
         $shop = Shop::findOrFail($id);
 
-        // Keep existing images
-        $images = $shop->shopImage ?? [];
-
-        // Append new images if uploaded
+        // Handle images (support both single and multiple file upload)
+        $existingImages = json_decode($shop->shopImage, true) ?? [];
+        $newImages = [];
         if ($request->hasFile('shopImage')) {
-            foreach ($request->file('shopImage') as $image) {
+            $files = $request->file('shopImage');
+            if (!is_array($files)) {
+                $files = [$files];
+            }
+            foreach ($files as $image) {
                 $path = $image->store('shops', 'public');
-                $images[] = $path;
+                $newImages[] = $path;
             }
         }
+        $shop->shopImage = count($newImages) > 0 ? json_encode($newImages) : json_encode($existingImages);
 
-        $shop->update([
-            'shopName'    => $request->shopName ?? $shop->shopName,
-            'shopAddress' => $request->shopAddress ?? $shop->shopAddress,
-            'description' => $request->description ?? $shop->description,
-            'locations'   => $request->locations ?? $shop->locations, // no json_encode
-            'shopImage'   => $images, // no json_encode
-        ]);
+        if ($request->filled('shopName')) $shop->shopName = $request->shopName;
+        if ($request->filled('shopAddress')) $shop->shopAddress = $request->shopAddress;
+        if ($request->filled('description')) $shop->description = $request->description;
+        if ($request->has('locations')) $shop->locations = is_array($request->locations) ? json_encode($request->locations) : $shop->locations;
+
+        $shop->save();
 
         return response()->json([
             'message' => 'Shop updated successfully!',

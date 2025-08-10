@@ -76,13 +76,41 @@ class VehicleController extends Controller
             'mileagePerDay' => 'sometimes|required|numeric',
             'fuelType' => 'sometimes|required|string|max:50',
             'withDriver' => 'sometimes|required|string|max:3',
+            'vehicleImage' => 'nullable',
             'vehicleImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'locations' => 'nullable|array',
             'description' => 'nullable|string'
         ]);
 
         $vehicle = Vehicle::findOrFail($id);
-        $vehicle->update($request->all());
+
+        // Handle images (support both single and multiple file upload)
+        $existingImages = json_decode($vehicle->vehicleImage, true) ?? [];
+        $newImages = [];
+        if ($request->hasFile('vehicleImage')) {
+            $files = $request->file('vehicleImage');
+            if (!is_array($files)) {
+                $files = [$files];
+            }
+            foreach ($files as $image) {
+                $path = $image->store('vehicles', 'public');
+                $newImages[] = $path;
+            }
+        }
+        $vehicle->vehicleImage = count($newImages) > 0 ? json_encode($newImages) : json_encode($existingImages);
+
+        if ($request->filled('vehicleName')) $vehicle->vehicleName = $request->vehicleName;
+        if ($request->filled('vehicleType')) $vehicle->vehicleType = $request->vehicleType;
+        if ($request->filled('vehicleNumber')) $vehicle->vehicleNumber = $request->vehicleNumber;
+        if ($request->filled('pricePerDay')) $vehicle->pricePerDay = $request->pricePerDay;
+        if ($request->filled('mileagePerDay')) $vehicle->mileagePerDay = $request->mileagePerDay;
+        if ($request->filled('fuelType')) $vehicle->fuelType = $request->fuelType;
+        if ($request->filled('withDriver')) $vehicle->withDriver = $request->withDriver;
+        if ($request->has('locations')) $vehicle->locations = is_array($request->locations) ? json_encode($request->locations) : $vehicle->locations;
+        if ($request->filled('description')) $vehicle->description = $request->description;
+        if ($request->filled('vehicle_owner_id')) $vehicle->vehicle_owner_id = $request->vehicle_owner_id;
+
+        $vehicle->save();
 
         return response()->json([
             'message' => 'Vehicle updated successfully!',
