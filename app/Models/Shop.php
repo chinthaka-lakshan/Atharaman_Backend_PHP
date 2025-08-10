@@ -31,5 +31,9 @@ class Shop extends Model
     {
         return $this->belongsTo(ShopOwner::class,'shop_owner_id');
     }
+    public function items()
+    {
+        return $this->hasMany(Item::class);
+    }
 
 }
