@@ -36,6 +36,7 @@ class VehicleController extends Controller
         ]);
         $images = [];
         if ($request->hasFile('vehicleImage')) {
+            $images = [];
             foreach ($request->file('vehicleImage') as $image) {
                 $path = $image->store('vehicles', 'public'); // saves in storage/app/public/vehicles
                 $images[] = $path;
