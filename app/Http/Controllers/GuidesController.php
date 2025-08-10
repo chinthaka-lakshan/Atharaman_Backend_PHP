@@ -25,7 +25,7 @@ class GuidesController extends Controller
         if ($request->hasFile('guideImage')) {
             $images = [];
             foreach ($request->file('guideImage') as $image) {
-                $path = $image->store('guides', 'public'); // saves in storage/app/public/guides
+                $path = $image->store('guides', 'public');
                 $images[] = $path;
             }
             $guideImagePaths = json_encode($images);
