@@ -58,7 +58,7 @@ class VehicleController extends Controller
             'locations' => json_encode($request->locations),
             'description' => $request->description,
             'user_id' => Auth::id(),
-            'vehicle_owner_id' => $request->vehicle_owner_id, // Assuming this is passed in the request
+            'vehicle_owner_id' => $request->vehicle_owner_id,
         ]);
 
         return response()->json([
