@@ -1,7 +1,8 @@
 <?php
 
 namespace App\Http\Controllers;
-
+use App\Models\OtherReviews;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 
 class OtherReviewsController extends Controller
@@ -16,7 +17,7 @@ class OtherReviewsController extends Controller
     public function show($id)
     {
         // Logic to retrieve and return a specific other review by ID
-        $otherReview = OtherReview::find($id);
+        $otherReview = OtherReviews::find($id);
         if ($otherReview) {
             return response()->json($otherReview);
         }
@@ -26,14 +27,13 @@ class OtherReviewsController extends Controller
 
     public function store(Request $request)
     {
-        // Logic to validate and create a new other review
         $validatedData = $request->validate([
             'review' => 'required|string|max:1000',
             'rating' => 'required|integer|min:1|max:5',
             'type' => 'required|string|in:vehicle,shop,hotel',
         ]);
 
-        $otherReview = OtherReview::create([
+        $otherReview = OtherReviews::create([
             'review' => $validatedData['review'],
             'rating' => $validatedData['rating'],
             'type' => $validatedData['type'],
@@ -55,7 +55,7 @@ class OtherReviewsController extends Controller
             'type' => 'required|string|in:vehicle,shop,hotel',
         ]);
 
-        $otherReview = OtherReview::find($id);
+        $otherReview = OtherReviews::find($id);
         if ($otherReview) {
             $otherReview->update($validatedData);
             return response()->json([
@@ -69,7 +69,7 @@ class OtherReviewsController extends Controller
     public function destroy($id)
     {
         // Logic to delete an existing other review
-        $otherReview = OtherReview::find($id);
+        $otherReview = OtherReviews::find($id);
         if ($otherReview) {
             $otherReview->delete();
             return response()->json(['message' => 'Other review deleted successfully!']);
@@ -79,7 +79,7 @@ class OtherReviewsController extends Controller
     public function getReviewsByType($type)
     {
         // Logic to retrieve reviews by type (e.g., hotel, restaurant)
-        $reviews = OtherReview::where('type', $type)->get();
+        $reviews = OtherReviews::where('type', $type)->get();
         if ($reviews->isEmpty()) {
             return response()->json(['message' => 'No reviews found for this type'], 404);
         }

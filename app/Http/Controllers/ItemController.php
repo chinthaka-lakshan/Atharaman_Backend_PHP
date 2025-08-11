@@ -1,7 +1,8 @@
 <?php
 
 namespace App\Http\Controllers;
-
+use App\Models\Item;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 
 class ItemController extends Controller
@@ -25,32 +26,31 @@ class ItemController extends Controller
 
     public function store(Request $request)
     {
-        // Logic to validate and create a new item
         $validatedData = $request->validate([
             'itemName' => 'required|string|max:255',
             'description' => 'nullable|string',
             'price' => 'required|numeric',
             'locations' => 'nullable|array',
             'itemImage' => 'nullable|array',
+            'itemImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'shop_id' => 'required|exists:shops,id',
         ]);
+
         $images = [];
         if ($request->hasFile('itemImage')) {
             foreach ($request->file('itemImage') as $image) {
-                $path = $image->store('items', 'public'); // saves in storage/app/public/items
+                $path = $image->store('items', 'public');
                 $images[] = $path;
             }
-            $validatedData['itemImage'] = json_encode($images);
-        } else {
-            $validatedData['itemImage'] = json_encode([]);
         }
+        $itemImage = json_encode($images);
 
         $item = Item::create([
             'itemName' => $validatedData['itemName'],
-            'description' => $validatedData['description'],
+            'description' => $validatedData['description'] ?? null,
             'price' => $validatedData['price'],
-            'locations' => json_encode($validatedData['locations']),
-            'itemImage' => $validatedData['itemImage'],
+            'locations' => isset($validatedData['locations']) ? json_encode($validatedData['locations']) : json_encode([]),
+            'itemImage' => $itemImage,
             'shop_id' => $validatedData['shop_id'],
         ]);
 
@@ -58,7 +58,6 @@ class ItemController extends Controller
             'message' => 'Item created successfully!',
             'item' => $item
         ]);
-
     }
 
     public function update(Request $request, $id)
