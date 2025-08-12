@@ -27,28 +27,24 @@ use App\Http\Controllers\LocationsController;
 use App\Http\Controllers\ItemController;
 use App\Http\Controllers\LocationHotelReviewsController;
 use App\Http\Controllers\OtherReviewsController;
+use App\Http\Controllers\AuthController;
 
-Route::post('/login', function (Request $request) {
-    $credentials = $request->validate([
-        'email' => 'required|email',
-        'password' => 'required'
-    ]);
 
-    if (!Auth::attempt($credentials)) {
-        return response()->json(['message' => 'Invalid login'], 401);
-    }
 
-    $user = Auth::user();
-    $token = $user->createToken('api-token')->plainTextToken;
+// Auth routes
+Route::post('/register', [AuthController::class, 'register']);
+Route::post('/login', [AuthController::class, 'login']);
 
-    return response()->json([
-        'user' => $user,
-        'token' => $token
-    ]);
+// Example: Admin-only route
+Route::middleware(['auth:sanctum', 'role:Admin'])->get('/admin/dashboard', function () {
+    return response()->json(['message' => 'Welcome Admin!']);
 });
 
+// Example: User and Admin route
+Route::middleware(['auth:sanctum', 'role:User,Admin'])->get('/user/profile', [AuthController::class, 'profile']);
 
-Route::middleware('auth:sanctum')->group(function () {
+
+Route::middleware(['auth:sanctum', 'role:Admin'])->group(function () {
     Route::apiResource('guides', GuidesController::class);
     Route::get('guides/location/{location}', [GuidesController::class, 'getByLocation']);
     Route::apiResource('shop-owners', ShopOwnerController::class);
@@ -65,9 +61,4 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('items', ItemController::class);
     Route::apiResource('location-hotel-reviews', LocationHotelReviewsController::class);
     Route::apiResource('other-reviews', OtherReviewsController::class);
-
-
-    Route::get('/user', function (Request $request) {
-        return $request->user();
-    });
 });
