@@ -18,7 +18,7 @@ return new class extends Migration
             $table->integer('rating')->min(1)->max(5);
             $table->string('comment')->nullable();
             $table->string('type'); 
-            $table->jason('reviewImages')->nullable();
+            $table->json('reviewImages')->nullable();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->timestamps();
         });
