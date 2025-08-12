@@ -10,6 +10,7 @@ use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\VerifyEmailController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AuthController;
 
 Route::middleware('guest')->group(function () {
     Route::get('register', [RegisteredUserController::class, 'create'])
@@ -57,3 +58,15 @@ Route::middleware('auth')->group(function () {
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])
                 ->name('logout');
 });
+
+// API Auth routes for registration and login
+Route::post('/register', [AuthController::class, 'register']);
+Route::post('/login', [AuthController::class, 'login']);
+
+// Example: Admin-only route
+Route::middleware(['auth:sanctum', 'role:Admin'])->get('/admin/dashboard', function () {
+    return response()->json(['message' => 'Welcome Admin!']);
+});
+
+// Example: User and Admin route
+Route::middleware(['auth:sanctum', 'role:User,Admin'])->get('/user/profile', [AuthController::class, 'profile']);
