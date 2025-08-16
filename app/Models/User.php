@@ -70,6 +70,22 @@ class User extends Authenticatable
         return $this->hasMany(LocationHotelReviews::class);
     }
 
+
+
+
+
+public function roles() {
+    return $this->belongsToMany(Role::class);
+}
+
+public function roleRequests() {
+    return $this->hasMany(RoleRequest::class);
+}
+
+public function hasRole($roleName) {
+    return $this->roles()->where('name', $roleName)->exists();
+}
+
     /**
      * The attributes that should be hidden for serialization.
      *
