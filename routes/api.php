@@ -30,6 +30,8 @@ use App\Http\Controllers\ItemController;
 use App\Http\Controllers\LocationHotelReviewsController;
 use App\Http\Controllers\OtherReviewsController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\RoleRequestController;
+use App\Http\Controllers\AdminRoleRequestController;
 
 
 
@@ -41,6 +43,7 @@ Route::post('/chatbot', [ChatbotController::class, 'ask']);
 // Example: Admin-only route
 Route::middleware(['auth:sanctum', 'role:Admin'])->get('/admin/dashboard', function () {
     return response()->json(['message' => 'Welcome Admin!']);
+
 });
 
 // Example: User and Admin route
@@ -64,4 +67,22 @@ Route::middleware(['auth:sanctum', 'role:Admin'])->group(function () {
     Route::apiResource('items', ItemController::class);
     Route::apiResource('location-hotel-reviews', LocationHotelReviewsController::class);
     Route::apiResource('other-reviews', OtherReviewsController::class);
+});
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/role-request', [RoleRequestController::class, 'store']);
+});
+
+// Route::middleware(['auth:sanctum', 'is_admin'])->group(function () {
+//     Route::get('/admin/role-requests', [AdminRoleRequestController::class, 'index']);
+//     Route::post('/admin/role-requests/{id}/approve', [AdminRoleRequestController::class, 'approve']);
+//     Route::post('/admin/role-requests/{id}/reject', [AdminRoleRequestController::class, 'reject']);
+// });
+
+
+
+Route::prefix('admin')->group(function () {
+    Route::get('/role-requests', [AdminRoleRequestController::class, 'index']);
+    Route::post('/role-requests/{id}/approve', [AdminRoleRequestController::class, 'approve']);
+    Route::post('/role-requests/{id}/reject', [AdminRoleRequestController::class, 'reject']);
 });
