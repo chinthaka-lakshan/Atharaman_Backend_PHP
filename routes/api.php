@@ -15,6 +15,8 @@ use App\Models\Location;
 use App\Models\Item;
 use App\Models\LocationHotelReviews;
 use App\Models\OtherReviews;
+use App\Models\TouristSpot;
+use App\Http\Controllers\ChatbotController;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\GuidesController;
 use App\Http\Controllers\ShopOwnerController;
@@ -36,6 +38,7 @@ use App\Http\Controllers\AdminRoleRequestController;
 // Auth routes
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/chatbot', [ChatbotController::class, 'ask']);
 
 // Example: Admin-only route
 Route::middleware(['auth:sanctum', 'role:Admin'])->get('/admin/dashboard', function () {
