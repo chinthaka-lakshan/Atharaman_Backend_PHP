@@ -28,6 +28,75 @@ class AuthController extends Controller
         return response()->json(['message' => 'User registered successfully']);
     }
 
+    // Admin Registration
+    public function registerAdmin(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users',
+            'password' => 'required|string|min:6',
+        ]);
+
+        $user = User::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+            'role' => 'Admin'
+        ]);
+
+        return response()->json([
+            'message' => 'Admin registered successfully',
+            'user' => $user
+        ]);
+    }
+
+    // Update User
+    public function updateUser(Request $request, $id)
+    {
+        $user = User::findOrFail($id);
+        
+        $request->validate([
+            'name' => 'sometimes|string|max:255',
+            'email' => 'sometimes|email|unique:users,email,' . $id,
+            'password' => 'sometimes|string|min:6',
+        ]);
+
+        // Update fields if provided
+        if ($request->has('name')) {
+            $user->name = $request->name;
+        }
+        
+        if ($request->has('email')) {
+            $user->email = $request->email;
+        }
+        
+        if ($request->has('password')) {
+            $user->password = Hash::make($request->password);
+        }
+
+        $user->save();
+
+        return response()->json([
+            'message' => 'User updated successfully',
+            'user' => $user
+        ]);
+    }
+
+    // Delete User
+    public function deleteUser($id)
+    {
+        $user = User::findOrFail($id);
+        
+        // Prevent deleting yourself
+        if ($user->id === Auth::id()) {
+            return response()->json(['error' => 'Cannot delete your own account'], 400);
+        }
+
+        $user->delete();
+
+        return response()->json(['message' => 'User deleted successfully']);
+    }
+
     // Login for both admin and user
     public function login(Request $request)
     {
@@ -60,9 +129,18 @@ class AuthController extends Controller
         return response()->json(['message' => 'Successfully logged out']);
     }
 
-    // User/Admin profile
+    // User profile
     public function profile(Request $request)
     {
         return response()->json($request->user());
+    }
+
+    public function getUsers(Request $request)
+    {
+        $users = User::select('id', 'name', 'email', 'role', 'created_at')
+                    ->orderBy('created_at', 'desc')
+                    ->get();
+
+        return response()->json($users);
     }
 }
