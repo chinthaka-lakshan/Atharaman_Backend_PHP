@@ -8,27 +8,16 @@ use Illuminate\Support\Facades\Auth;
 
 class ShopController extends Controller
 {
-    public function index()
-    {
-        $shops = Shop::all();
-        return response()->json($shops);
-    }
-
-    public function show($id)
-    {
-        $shop = Shop::findOrFail($id);
-        return response()->json($shop);
-    }
-
     public function store(Request $request)
     {
         $request->validate([
-        'shopName' => 'required|string|max:255',
-        'shopAddress' => 'required|string|max:255',
-        'description' => 'nullable|string',
-        'locations' => 'nullable|array',
-        'shopImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-        'shop_owner_id' => 'required|exists:shop_owners,id',
+            'shopName' => 'required|string|max:255',
+            'shopAddress' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'locations' => 'nullable|array',
+            'shopImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'shop_owner_id' => 'required|exists:shop_owners,id',
+            'user_id' => 'required|exists:users,id'
         ]);
 
         $images =[];
@@ -43,35 +32,36 @@ class ShopController extends Controller
             $shopImagePaths = json_encode([]);
         }
 
-        
-
         $shop = Shop::create([
             'shopName' => $request->shopName,
             'shopAddress' => $request->shopAddress,
             'description' => $request->description,
-            'locations' => json_encode($request->locations),
             'shopImage' => $shopImagePaths,
-            'user_id' => Auth::id(),
+            'locations' => json_encode($request->locations),
+            'user_id' => $request->user_id,
             'shop_owner_id' => $request->shop_owner_id,
         ]);
+
         return response()->json([
             'message' => 'Shop created successfully!',
             'shop' => $shop
         ]);
-
     }
+
     public function update(Request $request, $id)
     {
-        $request->validate([
+        $shop = Shop::findOrFail($id);
+        $existingImages = json_decode($guide->shopImage, true) ?? [];
+
+        $validated = $request->validate([
             'shopName' => 'sometimes|required|string|max:255',
             'shopAddress' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
             'locations' => 'nullable|array',
-            'shopImage' => 'nullable',
             'shopImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'user_id' => 'sometimes|required|exists:users,id',
+            'shop_owner_id' => 'sometimes|required|exists:shop_owners,id'
         ]);
-
-        $shop = Shop::findOrFail($id);
 
         // Handle images (support both single and multiple file upload)
         $existingImages = json_decode($shop->shopImage, true) ?? [];
@@ -88,32 +78,52 @@ class ShopController extends Controller
         }
         $shop->shopImage = count($newImages) > 0 ? json_encode($newImages) : json_encode($existingImages);
 
-        if ($request->filled('shopName')) $shop->shopName = $request->shopName;
-        if ($request->filled('shopAddress')) $shop->shopAddress = $request->shopAddress;
-        if ($request->filled('description')) $shop->description = $request->description;
-        if ($request->has('locations')) $shop->locations = is_array($request->locations) ? json_encode($request->locations) : $shop->locations;
+        $shop->fill($request->only([
+            'shopName', 'shopAddress', 'description'
+        ]));
+
+        if ($request->has('locations')) {
+            $shop->locations = json_encode($request->locations);
+        }
 
         $shop->save();
 
         return response()->json([
             'message' => 'Shop updated successfully!',
-            'shop' => $shop
+            'shop' => $shop->fresh()
         ]);
     }
 
-
-
-    public function destroy($id)
+    public function show($id)
     {
         $shop = Shop::findOrFail($id);
-        $shop->delete();
+        return response()->json($shop);
+    }
 
-        return response()->json(['message' => 'Shop deleted successfully!']);
+    public function index()
+    {
+        $shops = Shop::all();
+        return response()->json($shops);
     }
 
     public function getByLocation($location)
     {
         $shops = Shop::whereJsonContains('locations', $location)->get();
         return response()->json($shops);
+    }
+
+    public function destroy($id)
+    {
+        $shop = Shop::findOrFail($id);
+
+        // Delete associated images
+        $images = json_decode($shop->shopImage, true) ?? [];
+        foreach ($images as $image) {
+            \Storage::disk('public')->delete($image);
+        }
+
+        $shop->delete();
+
+        return response()->json(['message' => 'Shop deleted successfully!']);
     }
 }

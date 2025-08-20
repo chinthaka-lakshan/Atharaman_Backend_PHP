@@ -15,6 +15,7 @@ class ShopOwnerController extends Controller
             'shopOwnerNic' => 'required|string|max:255',
             'businessMail' => 'required|email',
             'contactNumber' => 'required|string|max:15',
+            'user_id' => 'required|exists:users,id'
         ]);
 
         $shopOwner = ShopOwner::create([
@@ -22,7 +23,7 @@ class ShopOwnerController extends Controller
             'shopOwnerNic' => $request->shopOwnerNic,
             'businessMail' => $request->businessMail,
             'contactNumber' => $request->contactNumber,
-            'user_id' => Auth::id(),
+            'user_id' => $request->user_id,
         ]);
 
         return response()->json([
@@ -30,30 +31,36 @@ class ShopOwnerController extends Controller
             'shopOwner' => $shopOwner
         ]);
     }
+
     public function update(Request $request, $id)
     {
-        $request->validate([
+        $shopOwner = ShopOwner::findOrFail($id);
+
+        $validated = $request->validate([
             'shopOwnerName' => 'sometimes|required|string|max:255',
             'shopOwnerNic' => 'sometimes|required|string|max:255',
             'businessMail' => 'sometimes|required|email',
             'contactNumber' => 'sometimes|required|string|max:15',
+            'user_id' => 'sometimes|required|exists:users,id'
         ]);
 
-        $shopOwner = ShopOwner::findOrFail($id);
-        $shopOwner->update($request->all());
+        // Update other fields
+        $shopOwner->fill($request->only([
+            'shopOwnerName', 'shopOwnerNic', 'businessMail', 'contactNumber'
+        ]));
+
+        $shopOwner->save();
 
         return response()->json([
             'message' => 'Shop Owner updated successfully!',
-            'shopOwner' => $shopOwner
+            'shopOwner' => $shopOwner->fresh()
         ]);
     }
 
-    public function destroy($id)
+    public function show($id)
     {
         $shopOwner = ShopOwner::findOrFail($id);
-        $shopOwner->delete();
-
-        return response()->json(['message' => 'Shop Owner deleted successfully!']);
+        return response()->json($shopOwner);
     }
 
     public function index()
@@ -62,9 +69,11 @@ class ShopOwnerController extends Controller
         return response()->json($shopOwners);
     }
 
-    public function show($id)
+    public function destroy($id)
     {
         $shopOwner = ShopOwner::findOrFail($id);
-        return response()->json($shopOwner);
+        $shopOwner->delete();
+
+        return response()->json(['message' => 'Shop Owner deleted successfully!']);
     }
 }

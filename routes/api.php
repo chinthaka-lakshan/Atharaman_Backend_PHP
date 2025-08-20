@@ -33,12 +33,15 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\RoleRequestController;
 use App\Http\Controllers\AdminRoleRequestController;
 
-
-
 // Auth routes
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 Route::post('/chatbot', [ChatbotController::class, 'ask']);
+
+// Password reset routes
+Route::post('/forgot-password', [AuthController::class, 'sendResetLink']);
+Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
 // Example: Admin-only route
 Route::middleware(['auth:sanctum', 'role:Admin'])->get('/admin/dashboard', function () {
