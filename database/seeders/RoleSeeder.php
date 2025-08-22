@@ -13,7 +13,8 @@ class RoleSeeder extends Seeder
             ['name' => 'user'],
             ['name' => 'guide'],
             ['name' => 'shop_owner'],
-            ['name' => 'hotel_owner']
+            ['name' => 'hotel_owner'],
+            ['name' => 'vehicle_owner']
         ]);
     }
 }

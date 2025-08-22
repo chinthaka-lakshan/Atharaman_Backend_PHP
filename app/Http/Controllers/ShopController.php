@@ -51,7 +51,7 @@ class ShopController extends Controller
     public function update(Request $request, $id)
     {
         $shop = Shop::findOrFail($id);
-        $existingImages = json_decode($guide->shopImage, true) ?? [];
+        $existingImages = json_decode($shop->shopImage, true) ?? [];
 
         $validated = $request->validate([
             'shopName' => 'sometimes|required|string|max:255',
