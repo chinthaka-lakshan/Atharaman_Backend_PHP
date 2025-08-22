@@ -19,8 +19,10 @@ class GuidesController extends Controller
             'guideImage.*'    => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'languages' => 'nullable|array',
             'locations' => 'nullable|array',
-            'description' => 'nullable|string'
+            'description' => 'nullable|string',
+            'user_id' => 'required|exists:users,id'
         ]);
+
         $images = [];
         if ($request->hasFile('guideImage')) {
             $images = [];
@@ -28,9 +30,6 @@ class GuidesController extends Controller
                 $path = $image->store('guides', 'public');
                 $images[] = $path;
             }
-            $guideImagePaths = json_encode($images);
-        } else {
-            $guideImagePaths = json_encode([]);
         }
 
         $guide = Guides::create([
@@ -39,12 +38,11 @@ class GuidesController extends Controller
             'businessMail' => $request->businessMail,
             'personalNumber' => $request->personalNumber,
             'whatsappNumber' => $request->whatsappNumber,
-            'guideImage' => $guideImagePaths,
-            // 'guideImage' => json_encode($request->guideImage),
-            'languages' => json_encode($request->languages),
-            'locations' => json_encode($request->locations),
             'description' => $request->description,
-            'user_id' => Auth::id(),
+            'guideImage' => $images,
+            'languages' => $request->languages,
+            'locations' => $request->locations,
+            'user_id' => $request->user_id
         ]);
 
         return response()->json([
@@ -56,6 +54,7 @@ class GuidesController extends Controller
     public function update(Request $request, $id)
     {
         $guide = Guides::findOrFail($id);
+        $existingImages = $guide->guideImage ?? [];
 
         $validated = $request->validate([
             'guideName' => 'sometimes|required|string|max:255',
@@ -63,47 +62,57 @@ class GuidesController extends Controller
             'businessMail' => 'sometimes|required|email',
             'personalNumber' => 'sometimes|required|string|max:15',
             'whatsappNumber' => 'nullable|string|max:15',
-            'guideImage' => 'nullable',
             'guideImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'languages' => 'nullable|array',
             'locations' => 'nullable|array',
-            'description' => 'nullable|string'
+            'description' => 'nullable|string',
+            'user_id' => 'sometimes|required|exists:users,id'
         ]);
 
-        // Handle images (support both single and multiple file upload)
-        $existingImages = json_decode($guide->guideImage, true) ?? [];
-        $newImages = [];
+        // Handle image updates
         if ($request->hasFile('guideImage')) {
-            $files = $request->file('guideImage');
-            // If single file, wrap in array
-            if (!is_array($files)) {
-                $files = [$files];
+            // Delete existing images from storage
+            foreach ($existingImages as $oldImage) {
+                \Storage::disk('public')->delete($oldImage);
             }
-            foreach ($files as $image) {
+            
+            // Store new images
+            $newImages = [];
+            foreach ($request->file('guideImage') as $image) {
                 $path = $image->store('guides', 'public');
                 $newImages[] = $path;
             }
+            $guide->guideImage = $newImages;
+        } elseif ($request->input('remove_images') === 'true') {
+            // Explicit request to remove all images
+            foreach ($existingImages as $oldImage) {
+                \Storage::disk('public')->delete($oldImage);
+            }
+            $guide->guideImage = [];
         }
-        // If new images uploaded, replace, else keep existing
-        $guide->guideImage = count($newImages) > 0 ? json_encode($newImages) : json_encode($existingImages);
 
-        // Update other fields if present
-        if ($request->filled('guideName')) $guide->guideName = $request->guideName;
-        if ($request->filled('guideNic')) $guide->guideNic = $request->guideNic;
-        if ($request->filled('businessMail')) $guide->businessMail = $request->businessMail;
-        if ($request->filled('personalNumber')) $guide->personalNumber = $request->personalNumber;
-        if ($request->filled('whatsappNumber')) $guide->whatsappNumber = $request->whatsappNumber;
-        if ($request->has('languages')) $guide->languages = is_array($request->languages) ? json_encode($request->languages) : $guide->languages;
-        if ($request->has('locations')) $guide->locations = is_array($request->locations) ? json_encode($request->locations) : $guide->locations;
-        if ($request->filled('description')) $guide->description = $request->description;
+        // Update other fields
+        $guide->fill($request->only([
+            'guideName', 'guideNic', 'businessMail', 
+            'personalNumber', 'whatsappNumber', 'description'
+        ]));
+
+        if ($request->has('languages')) {
+            $guide->languages = $request->languages;
+        }
+
+        if ($request->has('locations')) {
+            $guide->locations = $request->locations;
+        }
 
         $guide->save();
 
         return response()->json([
             'message' => 'Guide updated successfully!',
-            'guide' => $guide
+            'guide' => $guide->fresh()
         ]);
     }
+
     public function show($id)
     {
         $guide = Guides::findOrFail($id);
@@ -122,9 +131,16 @@ class GuidesController extends Controller
         return response()->json($guides);
     }
 
-    public function delete($id)
+    public function destroy($id)
     {
         $guide = Guides::findOrFail($id);
+
+        // Delete associated images
+        $images = $guide->guideImage ?? [];
+        foreach ($images as $image) {
+            \Storage::disk('public')->delete($image);
+        }
+
         $guide->delete();
 
         return response()->json(['message' => 'Guide deleted successfully!']);
