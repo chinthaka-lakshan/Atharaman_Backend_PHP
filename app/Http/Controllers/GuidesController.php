@@ -30,9 +30,6 @@ class GuidesController extends Controller
                 $path = $image->store('guides', 'public');
                 $images[] = $path;
             }
-            $guideImagePaths = json_encode($images);
-        } else {
-            $guideImagePaths = json_encode([]);
         }
 
         $guide = Guides::create([
@@ -42,9 +39,9 @@ class GuidesController extends Controller
             'personalNumber' => $request->personalNumber,
             'whatsappNumber' => $request->whatsappNumber,
             'description' => $request->description,
-            'guideImage' => $guideImagePaths,
-            'languages' => json_encode($request->languages),
-            'locations' => json_encode($request->locations),
+            'guideImage' => $images,
+            'languages' => $request->languages,
+            'locations' => $request->locations,
             'user_id' => $request->user_id
         ]);
 
@@ -57,7 +54,7 @@ class GuidesController extends Controller
     public function update(Request $request, $id)
     {
         $guide = Guides::findOrFail($id);
-        $existingImages = json_decode($guide->guideImage, true) ?? [];
+        $existingImages = $guide->guideImage ?? [];
 
         $validated = $request->validate([
             'guideName' => 'sometimes|required|string|max:255',
@@ -85,13 +82,13 @@ class GuidesController extends Controller
                 $path = $image->store('guides', 'public');
                 $newImages[] = $path;
             }
-            $guide->guideImage = json_encode($newImages);
+            $guide->guideImage = $newImages;
         } elseif ($request->input('remove_images') === 'true') {
             // Explicit request to remove all images
             foreach ($existingImages as $oldImage) {
                 \Storage::disk('public')->delete($oldImage);
             }
-            $guide->guideImage = json_encode([]);
+            $guide->guideImage = [];
         }
 
         // Update other fields
@@ -101,11 +98,11 @@ class GuidesController extends Controller
         ]));
 
         if ($request->has('languages')) {
-            $guide->languages = json_encode($request->languages);
+            $guide->languages = $request->languages;
         }
 
         if ($request->has('locations')) {
-            $guide->locations = json_encode($request->locations);
+            $guide->locations = $request->locations;
         }
 
         $guide->save();
@@ -139,7 +136,7 @@ class GuidesController extends Controller
         $guide = Guides::findOrFail($id);
 
         // Delete associated images
-        $images = json_decode($guide->guideImage, true) ?? [];
+        $images = $guide->guideImage ?? [];
         foreach ($images as $image) {
             \Storage::disk('public')->delete($image);
         }
