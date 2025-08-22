@@ -46,10 +46,14 @@ Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 Route::middleware(['auth:sanctum'])->group(function () {
     // User profile - accessible to any authenticated user
     Route::get('/user/profile', [AuthController::class, 'profile']);
-    // Logout - accessible to any authenticated user
-    Route::post('/logout', [AuthController::class, 'logout']);
+    // Get user's role requests
+    Route::get('/user/role-requests', function (Request $request) {
+        return $request->user()->roleRequests()->with('role')->get();
+    });
     // Role requests - accessible to any authenticated user
     Route::post('/role-request', [RoleRequestController::class, 'store']);
+    // Logout - accessible to any authenticated user
+    Route::post('/logout', [AuthController::class, 'logout']);
 });
 
 // Admin-only routes

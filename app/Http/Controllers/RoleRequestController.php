@@ -9,7 +9,6 @@ use Illuminate\Support\Facades\Auth;
 
 class RoleRequestController extends Controller
 {
-    
     public function store(Request $request) {
         $request->validate([
             'role_id' => 'required|exists:roles,id'
@@ -19,9 +18,9 @@ class RoleRequestController extends Controller
         $user = Auth::user();
 
         // Check if already has role
-        // if ($user->roles()->where('role_id', $role->id)->exists()) {
-        //     return response()->json(['message' => 'You already have this role'], 400);
-        // }
+        if ($user->roles()->where('role_id', $role->id)->exists()) {
+            return response()->json(['message' => 'You already have this role'], 400);
+        }
 
         // Check if request already pending
         if (RoleRequest::where('user_id', $user->id)
@@ -62,7 +61,14 @@ class RoleRequestController extends Controller
                     'extra_data.hotelOwnerNic' => 'required|string|max:12',
                     'extra_data.businessMail' => 'required|email|max:100',
                     'extra_data.contactNumber' => 'required|string|max:15',
-            
+                ];
+                break;
+            case 'vehicle_owner':
+                $extraDataRules = [
+                    'extra_data.vehicleOwnerName' => 'required|string|max:100',
+                    'extra_data.vehicleOwnerNic' => 'required|string|max:12',
+                    'extra_data.businessMail' => 'required|email|max:100',
+                    'extra_data.contactNumber' => 'required|string|max:15',
                 ];
                 break;
         }
@@ -73,7 +79,8 @@ class RoleRequestController extends Controller
         RoleRequest::create([
             'user_id' => $user->id,
             'role_id' => $role->id,
-            'extra_data' => $request->extra_data
+            'extra_data' => $request->extra_data,
+            'status' => 'pending'
         ]);
 
         return response()->json(['message' => 'Request submitted successfully']);

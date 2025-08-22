@@ -132,7 +132,10 @@ class AuthController extends Controller
     // User profile
     public function profile(Request $request)
     {
-        return response()->json($request->user());
+        // Eager load the roles relationship
+        $user = $request->user()->load('roles');
+        
+        return response()->json($user);
     }
 
     public function getUsers(Request $request)
