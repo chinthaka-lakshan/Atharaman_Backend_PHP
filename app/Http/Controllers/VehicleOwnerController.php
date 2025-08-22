@@ -28,7 +28,8 @@ class VehicleOwnerController extends Controller
             'personalNumber' => 'required|string|max:15',
             'whatsappNumber' => 'nullable|string|max:15',
             'locations' => 'nullable|array',
-            'description' => 'nullable|string'
+            'description' => 'nullable|string',
+            'user_id' => 'required|exists:users,id'
         ]);
 
         $vehicleOwner = VehicleOwner::create([
@@ -37,9 +38,9 @@ class VehicleOwnerController extends Controller
             'businessMail' => $request->businessMail,
             'personalNumber' => $request->personalNumber,
             'whatsappNumber' => $request->whatsappNumber,
-            'locations' => json_encode($request->locations),
+            'locations' => $request->locations,
             'description' => $request->description,
-            'user_id' => Auth::id(),
+            'user_id' => $request->user_id
         ]);
 
         return response()->json([
@@ -48,6 +49,37 @@ class VehicleOwnerController extends Controller
         ]);
     }
 
+    public function update(Request $request, $id)
+    {
+        $vehicleOwner = VehicleOwner::findOrFail($id);
+
+        $validated = $request->validate([
+            'vehicleOwnerName' => 'sometimes|required|string|max:255',
+            'vehicleOwnerNic' => 'sometimes|required|string|max:255',
+            'businessMail' => 'sometimes|required|email',
+            'personalNumber' => 'sometimes|required|string|max:15',
+            'whatsappNumber' => 'nullable|string|max:15',
+            'locations' => 'nullable|array',
+            'description' => 'nullable|string',
+            'user_id' => 'sometimes|required|exists:users,id'
+        ]);
+
+        $vehicleOwner->fill($request->only([
+            'vehicleOwnerName', 'vehicleOwnerNic', 'businessMail',
+            'personalNumber', 'whatsappNumber', 'description'
+        ]));
+
+        if ($request->has('locations')) {
+            $vehicleOwner->locations = $request->locations;
+        }
+
+        $vehicleOwner->save();
+
+        return response()->json([
+            'message' => 'Vehicle Owner updated successfully!',
+            'vehicleOwner' => $vehicleOwner->fresh()
+        ]);
+    }
 
     public function destroy($id)
     {

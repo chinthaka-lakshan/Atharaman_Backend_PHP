@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
+
 use App\Models\Location;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
@@ -9,27 +10,19 @@ class LocationsController extends Controller
 {
     public function index()
     {
-        return response()->json([
-            'locations' => Location::all()
-        ]);
+        $locations = Location::all();
+        return response()->json($locations);
     }
 
     public function show($id)
     {
-        $location = Location::find($id);
-
-        if (!$location) {
-            return response()->json(['message' => 'Location not found'], 404);
-        }
-
-        return response()->json([
-            'location' => $location
-        ]);
+        $location = Location::findOrFail($id);
+        return response()->json($location);
     }
 
     public function store(Request $request)
     {
-        $validatedData = $request->validate([
+        $request->validate([
             'locationName' => 'required|string|max:255',
             'shortDescription' => 'nullable|string|max:500',
             'longDescription' => 'nullable|string|max:1000',
@@ -38,25 +31,24 @@ class LocationsController extends Controller
             'longitude' => 'required|numeric',
             'locationImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
+
         $images = [];
         if ($request->hasFile('locationImage')) {
+            $images = [];
             foreach ($request->file('locationImage') as $image) {
-                $path = $image->store('locations', 'public'); // saves in storage/app/public/locations
+                $path = $image->store('locations', 'public');
                 $images[] = $path;
             }
-            $validatedData['locationImage'] = json_encode($images);
-        } else {
-            $validatedData['locationImage'] = json_encode([]);
         }
 
         $location = Location::create([
-            'locationName' => $validatedData['locationName'],
-            'shortDescription' => $validatedData['shortDescription'],
-            'longDescription' => $validatedData['longDescription'],
-            'province' => $validatedData['province'],
-            'latitude' => $validatedData['latitude'],
-            'longitude' => $validatedData['longitude'],
-            'locationImage' => $validatedData['locationImage'],
+            'locationName' => $request->locationName,
+            'shortDescription' => $request->shortDescription,
+            'longDescription' => $request->longDescription,
+            'province' => $request->province,
+            'latitude' => $request->latitude,
+            'longitude' => $request->longitude,
+            'locationImage' => $images
         ]);
 
         return response()->json([
@@ -67,55 +59,69 @@ class LocationsController extends Controller
 
     public function update(Request $request, $id)
     {
-        $location = Location::find($id);
+        $location = Location::findorFail($id);
+        $existingImages = $location->locationImage ?? [];
 
-        if (!$location) {
-            return response()->json(['message' => 'Location not found'], 404);
-        }
-
-        $validatedData = $request->validate([
-            'locationName' => 'required|string|max:255',
-            'shortDescription' => 'nullable|string|max:500',
-            'longDescription' => 'nullable|string|max:1000',
-            'province' => 'required|string|max:100',
-            'latitude' => 'required|numeric',
-            'longitude' => 'required|numeric',
+        $validated = $request->validate([
+            'locationName' => 'sometimes|required|string|max:255',
+            'shortDescription' => 'sometimes|nullable|string|max:500',
+            'longDescription' => 'sometimes|nullable|string|max:1000',
+            'province' => 'sometimes|required|string|max:100',
+            'latitude' => 'sometimes|required|numeric',
+            'longitude' => 'sometimes|required|numeric',
             'locationImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
 
-        $images = [];
+        // Handle image updates
         if ($request->hasFile('locationImage')) {
+            // Delete existing images from storage
+            foreach ($existingImages as $oldImage) {
+                \Storage::disk('public')->delete($oldImage);
+            }
+            // Store new images
+            $newImages = [];
             foreach ($request->file('locationImage') as $image) {
                 $path = $image->store('locations', 'public');
-                $images[] = $path;
+                $newImages[] = $path;
             }
-            $validatedData['locationImage'] = json_encode($images);
-        } else {
-            $validatedData['locationImage'] = json_encode([]);
+            $location->locationImage = $newImages;
+        } elseif ($request->input('remove_images') === 'true') {
+            // Explicit request to remove all images
+            foreach ($existingImages as $oldImage) {
+                \Storage::disk('public')->delete($oldImage);
+            }
+            $location->locationImage = [];
         }
 
-        $location->update($validatedData);
+        // Update other fields
+        $location->fill($request->only([
+            'locationName', 'shortDescription', 'longDescription',
+            'province', 'latitude', 'longitude'
+        ]));
+
+        $location->save();
 
         return response()->json([
             'message' => 'Location updated successfully!',
-            'location' => $location
+            'location' => $location->fresh()
         ]);
     }
 
     public function destroy($id)
     {
-        $location = Location::find($id);
+        $location = Location::findOrFail($id);
 
-        if (!$location) {
-            return response()->json(['message' => 'Location not found'], 404);
+        // Delete associated images
+        $images = $location->locationImage ?? [];
+        foreach ($images as $image) {
+            \Storage::disk('public')->delete($image);
         }
 
         $location->delete();
 
-        return response()->json([
-            'message' => 'Location deleted successfully!'
-        ]);
+        return response()->json(['message' => 'Location deleted successfully!']);
     }
+
     public function getByProvince($province)
     {
         $locations = Location::where('province', $province)->get();
@@ -128,5 +134,4 @@ class LocationsController extends Controller
             'locations' => $locations
         ]);
     }
-    
 }
