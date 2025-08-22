@@ -27,6 +27,7 @@ class HotelOwnerController extends Controller
             'hotelOwnerNic' => 'required|string|max:255',
             'businessMail' => 'required|email',
             'contactNumber' => 'required|string|max:15',
+            'user_id' => 'required|exists:users,id'
         ]);
 
         $hotelOwner = HotelOwner::create([
@@ -34,7 +35,7 @@ class HotelOwnerController extends Controller
             'hotelOwnerNic' => $request->hotelOwnerNic,
             'businessMail' => $request->businessMail,
             'contactNumber' => $request->contactNumber,
-            'user_id' => Auth::id(),
+            'user_id' => $request->user_id
         ]);
 
         return response()->json([
@@ -42,21 +43,28 @@ class HotelOwnerController extends Controller
             'hotelOwner' => $hotelOwner
         ]);
     }
+
     public function update(Request $request, $id)
     {
-        $request->validate([
+        $hotelOwner = HotelOwner::findOrFail($id);
+
+        $validated = $request->validate([
             'hotelOwnerName' => 'sometimes|required|string|max:255',
             'hotelOwnerNic' => 'sometimes|required|string|max:255',
             'businessMail' => 'sometimes|required|email',
             'contactNumber' => 'sometimes|required|string|max:15',
+            'user_id' => 'sometimes|required|exists:users,id'
         ]);
 
-        $hotelOwner = HotelOwner::findOrFail($id);
-        $hotelOwner->update($request->all());
+        $hotelOwner->fill($request->only([
+            'hotelOwnerName', 'hotelOwnerNic', 'businessMail', 'contactNumber'
+        ]));
+
+        $hotelOwner->save();
 
         return response()->json([
             'message' => 'Hotel Owner updated successfully!',
-            'hotelOwner' => $hotelOwner
+            'hotelOwner' => $hotelOwner->fresh()
         ]);
     }
 

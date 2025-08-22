@@ -27,19 +27,16 @@ class ShopController extends Controller
                 $path = $image->store('shops', 'public'); 
                 $images[] = $path;
             }
-            $shopImagePaths = json_encode($images);
-        } else {
-            $shopImagePaths = json_encode([]);
         }
 
         $shop = Shop::create([
             'shopName' => $request->shopName,
             'shopAddress' => $request->shopAddress,
             'description' => $request->description,
-            'shopImage' => $shopImagePaths,
-            'locations' => json_encode($request->locations),
+            'shopImage' => $images,
+            'locations' => $request->locations,
             'user_id' => $request->user_id,
-            'shop_owner_id' => $request->shop_owner_id,
+            'shop_owner_id' => $request->shop_owner_id
         ]);
 
         return response()->json([
@@ -51,7 +48,7 @@ class ShopController extends Controller
     public function update(Request $request, $id)
     {
         $shop = Shop::findOrFail($id);
-        $existingImages = json_decode($shop->shopImage, true) ?? [];
+        $existingImages = $shop->shopImage ?? [];
 
         $validated = $request->validate([
             'shopName' => 'sometimes|required|string|max:255',
@@ -63,27 +60,34 @@ class ShopController extends Controller
             'shop_owner_id' => 'sometimes|required|exists:shop_owners,id'
         ]);
 
-        // Handle images (support both single and multiple file upload)
-        $existingImages = json_decode($shop->shopImage, true) ?? [];
-        $newImages = [];
+        // Handle image updates
         if ($request->hasFile('shopImage')) {
-            $files = $request->file('shopImage');
-            if (!is_array($files)) {
-                $files = [$files];
+            // Delete existing images from storage
+            foreach ($existingImages as $oldImage) {
+                \Storage::disk('public')->delete($oldImage);
             }
-            foreach ($files as $image) {
+            // Store new images
+            $newImages = [];
+            foreach ($request->file('shopImage') as $image) {
                 $path = $image->store('shops', 'public');
                 $newImages[] = $path;
             }
+            $shop->shopImage = $newImages;
+        } elseif ($request->input('remove_images') === 'true') {
+            // Explicit request to remove all images
+            foreach ($existingImages as $oldImage) {
+                \Storage::disk('public')->delete($oldImage);
+            }
+            $shop->shopImage = [];
         }
-        $shop->shopImage = count($newImages) > 0 ? json_encode($newImages) : json_encode($existingImages);
-
+        
+        // Update other fields
         $shop->fill($request->only([
             'shopName', 'shopAddress', 'description'
         ]));
 
         if ($request->has('locations')) {
-            $shop->locations = json_encode($request->locations);
+            $shop->locations = $request->locations;
         }
 
         $shop->save();
@@ -117,7 +121,7 @@ class ShopController extends Controller
         $shop = Shop::findOrFail($id);
 
         // Delete associated images
-        $images = json_decode($shop->shopImage, true) ?? [];
+        $images = $shop->shopImage ?? [];
         foreach ($images as $image) {
             \Storage::disk('public')->delete($image);
         }

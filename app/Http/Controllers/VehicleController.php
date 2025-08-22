@@ -32,18 +32,18 @@ class VehicleController extends Controller
             'withDriver' => 'required|string|max:3',
             'vehicleImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'locations' => 'nullable|array',
-            'description' => 'nullable|string'
+            'description' => 'nullable|string',
+            'vehicle_owner_id' => 'required|exists:vehicle_owners,id',
+            'user_id' => 'required|exists:users,id'
         ]);
+
         $images = [];
         if ($request->hasFile('vehicleImage')) {
             $images = [];
             foreach ($request->file('vehicleImage') as $image) {
-                $path = $image->store('vehicles', 'public'); // saves in storage/app/public/vehicles
+                $path = $image->store('vehicles', 'public');
                 $images[] = $path;
             }
-            $vehicleImagePaths = json_encode($images);
-        } else {
-            $vehicleImagePaths = json_encode([]);
         }
 
         $vehicle = Vehicle::create([
@@ -54,11 +54,11 @@ class VehicleController extends Controller
             'mileagePerDay' => $request->mileagePerDay,
             'fuelType' => $request->fuelType,
             'withDriver' => $request->withDriver,
-            'vehicleImage' => $vehicleImagePaths,
-            'locations' => json_encode($request->locations),
+            'vehicleImage' => $images,
+            'locations' => $request->locations,
             'description' => $request->description,
-            'user_id' => Auth::id(),
-            'vehicle_owner_id' => $request->vehicle_owner_id,
+            'user_id' => $request->user_id,
+            'vehicle_owner_id' => $request->vehicle_owner_id
         ]);
 
         return response()->json([
@@ -68,7 +68,10 @@ class VehicleController extends Controller
     }
     public function update(Request $request, $id)
     {
-        $request->validate([
+        $vehicle = Vehicle::findOrFail($id);
+        $existingImages = $vehicle->vehicleImage ?? [];
+
+        $validated = $request->validate([
             'vehicleName' => 'sometimes|required|string|max:255',
             'vehicleType' => 'sometimes|required|string|max:255',
             'vehicleNumber' => 'sometimes|required|string|max:20',
@@ -76,51 +79,69 @@ class VehicleController extends Controller
             'mileagePerDay' => 'sometimes|required|numeric',
             'fuelType' => 'sometimes|required|string|max:50',
             'withDriver' => 'sometimes|required|string|max:3',
-            'vehicleImage' => 'nullable',
             'vehicleImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'locations' => 'nullable|array',
-            'description' => 'nullable|string'
+            'description' => 'nullable|string',
+            'user_id' => 'sometimes|required|exists:users,id',
+            'vehicle_owner_id' => 'sometimes|required|exists:vehicle_owners,id'
         ]);
 
-        $vehicle = Vehicle::findOrFail($id);
-
-        // Handle images (support both single and multiple file upload)
-        $existingImages = json_decode($vehicle->vehicleImage, true) ?? [];
-        $newImages = [];
+        // Handle image updates
         if ($request->hasFile('vehicleImage')) {
-            $files = $request->file('vehicleImage');
-            if (!is_array($files)) {
-                $files = [$files];
+            // Delete existing images from storage
+            foreach ($existingImages as $oldImage) {
+                \Storage::disk('public')->delete($oldImage);
             }
-            foreach ($files as $image) {
+            // Store new images
+            $newImages = [];
+            foreach ($request->file('vehicleImage') as $image) {
                 $path = $image->store('vehicles', 'public');
                 $newImages[] = $path;
             }
+            $vehicle->vehicleImage = $newImages;
+        } elseif ($request->input('remove_images') === 'true') {
+            // Explicit request to remove all images
+            foreach ($existingImages as $oldImage) {
+                \Storage::disk('public')->delete($oldImage);
+            }
+            $vehicle->vehicleImage = [];
         }
-        $vehicle->vehicleImage = count($newImages) > 0 ? json_encode($newImages) : json_encode($existingImages);
 
-        if ($request->filled('vehicleName')) $vehicle->vehicleName = $request->vehicleName;
-        if ($request->filled('vehicleType')) $vehicle->vehicleType = $request->vehicleType;
-        if ($request->filled('vehicleNumber')) $vehicle->vehicleNumber = $request->vehicleNumber;
-        if ($request->filled('pricePerDay')) $vehicle->pricePerDay = $request->pricePerDay;
-        if ($request->filled('mileagePerDay')) $vehicle->mileagePerDay = $request->mileagePerDay;
-        if ($request->filled('fuelType')) $vehicle->fuelType = $request->fuelType;
-        if ($request->filled('withDriver')) $vehicle->withDriver = $request->withDriver;
-        if ($request->has('locations')) $vehicle->locations = is_array($request->locations) ? json_encode($request->locations) : $vehicle->locations;
-        if ($request->filled('description')) $vehicle->description = $request->description;
-        if ($request->filled('vehicle_owner_id')) $vehicle->vehicle_owner_id = $request->vehicle_owner_id;
+        // Update other fields
+        $vehicle->fill($request->only([
+            'vehicleName', 'vehicleType', 'vehicleNumber',
+            'pricePerDay', 'mileagePerDay', 'fuelType',
+            'withDriver', 'description'
+        ]));
+
+        if ($request->has('locations')) {
+            $vehicle->locations = $request->locations;
+        }
 
         $vehicle->save();
 
         return response()->json([
             'message' => 'Vehicle updated successfully!',
-            'vehicle' => $vehicle
+            'vehicle' => $vehicle->fresh()
         ]);
+    }
+
+    public function getByLocation($location)
+    {
+        $vehicles = Vehicle::whereJsonContains('locations', $location)->get();
+        return response()->json($vehicles);
     }
 
     public function destroy($id)
     {
         $vehicle = Vehicle::findOrFail($id);
+
+        // Delete associated images
+        $images = $vehicle->vehicleImage ?? [];
+        foreach ($images as $image) {
+            \Storage::disk('public')->delete($image);
+        }
+
         $vehicle->delete();
 
         return response()->json(['message' => 'Vehicle deleted successfully!']);

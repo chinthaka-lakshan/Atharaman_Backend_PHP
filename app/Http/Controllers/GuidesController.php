@@ -66,25 +66,40 @@ class GuidesController extends Controller
             'languages' => 'nullable|array',
             'locations' => 'nullable|array',
             'description' => 'nullable|string',
-            'user_id' => 'sometimes|required|exists:users,id'
+            'remove_images' => 'nullable|array', // For individual image removal
+            'remove_images.*' => 'nullable|string' // Image paths to remove
         ]);
 
-        // Handle image updates
-        if ($request->hasFile('guideImage')) {
-            // Delete existing images from storage
-            foreach ($existingImages as $oldImage) {
-                \Storage::disk('public')->delete($oldImage);
+        // Handle individual image removal first
+        if ($request->has('remove_images') && is_array($request->remove_images)) {
+            foreach ($request->remove_images as $imageToRemove) {
+                // Find and remove the image from existing images array
+                if (($key = array_search($imageToRemove, $existingImages)) !== false) {
+                    \Storage::disk('public')->delete($existingImages[$key]);
+                    unset($existingImages[$key]);
+                }
             }
-            
-            // Store new images
+            // Reindex the array
+            $existingImages = array_values($existingImages);
+            $guide->guideImage = $existingImages;
+        }
+
+        // Handle new image uploads
+        if ($request->hasFile('guideImage')) {
             $newImages = [];
             foreach ($request->file('guideImage') as $image) {
                 $path = $image->store('guides', 'public');
                 $newImages[] = $path;
             }
-            $guide->guideImage = $newImages;
-        } elseif ($request->input('remove_images') === 'true') {
-            // Explicit request to remove all images
+            
+            // If we have existing images after removal, merge with new ones
+            if (!empty($existingImages)) {
+                $guide->guideImage = array_merge($existingImages, $newImages);
+            } else {
+                $guide->guideImage = $newImages;
+            }
+        } elseif ($request->input('remove_all_images') === 'true') {
+            // Handle explicit request to remove all images
             foreach ($existingImages as $oldImage) {
                 \Storage::disk('public')->delete($oldImage);
             }
