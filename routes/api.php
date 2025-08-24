@@ -42,6 +42,9 @@ Route::post('/chatbot', [ChatbotController::class, 'ask']);
 Route::post('/forgot-password', [AuthController::class, 'sendResetLink']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
+Route::get('/all_guides', [GuidesController::class, 'index']);
+Route::get('/guides/{id}', [GuidesController::class, 'show']);
+
 // Authenticated routes (any logged-in user)
 Route::middleware(['auth:sanctum'])->group(function () {
     // User profile - accessible to any authenticated user
