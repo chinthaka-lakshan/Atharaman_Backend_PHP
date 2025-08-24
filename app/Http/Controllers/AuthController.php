@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Auth;
 
 class AuthController extends Controller
 {
-    // User registration (default role: User)
+    // User registration
     public function register(Request $request)
     {
         $request->validate([
@@ -25,7 +25,10 @@ class AuthController extends Controller
             'role' => 'User'
         ]);
 
-        return response()->json(['message' => 'User registered successfully']);
+        return response()->json([
+            'message' => 'User registered successfully',
+            'user' => $user
+        ]);
     }
 
     // Admin Registration
@@ -55,10 +58,11 @@ class AuthController extends Controller
     {
         $user = User::findOrFail($id);
         
-        $request->validate([
+        $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
             'email' => 'sometimes|email|unique:users,email,' . $id,
             'password' => 'sometimes|string|min:6',
+            'role' => 'sometimes|string'
         ]);
 
         // Update fields if provided
@@ -78,7 +82,7 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'User updated successfully',
-            'user' => $user
+            'user' => $user->fresh()
         ]);
     }
 
@@ -86,7 +90,7 @@ class AuthController extends Controller
     public function deleteUser($id)
     {
         $user = User::findOrFail($id);
-        
+
         // Prevent deleting yourself
         if ($user->id === Auth::id()) {
             return response()->json(['error' => 'Cannot delete your own account'], 400);

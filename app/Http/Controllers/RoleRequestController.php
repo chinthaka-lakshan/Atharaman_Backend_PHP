@@ -46,15 +46,16 @@ class RoleRequestController extends Controller
                     'extra_data.description' => 'required|string|max:500'
                 ];
                 break;
+
             case 'shop_owner':
                 $extraDataRules = [
                     'extra_data.shopOwnerName' => 'required|string|max:100',
                     'extra_data.shopOwnerNic' => 'required|string|max:12',
                     'extra_data.businessMail' => 'required|email|max:100',
                     'extra_data.contactNumber' => 'required|string|max:15',
-
                 ];
                 break;
+
             case 'hotel_owner':
                 $extraDataRules = [
                     'extra_data.hotelOwnerName' => 'required|string|max:100',
@@ -63,12 +64,16 @@ class RoleRequestController extends Controller
                     'extra_data.contactNumber' => 'required|string|max:15',
                 ];
                 break;
+
             case 'vehicle_owner':
                 $extraDataRules = [
                     'extra_data.vehicleOwnerName' => 'required|string|max:100',
                     'extra_data.vehicleOwnerNic' => 'required|string|max:12',
                     'extra_data.businessMail' => 'required|email|max:100',
-                    'extra_data.contactNumber' => 'required|string|max:15',
+                    'extra_data.personalNumber' => 'required|string|max:15',
+                    'extra_data.whatsappNumber' => 'required|string|max:15',
+                    'extra_data.locations' => 'required|array',
+                    'extra_data.description' => 'required|string|max:500'
                 ];
                 break;
         }

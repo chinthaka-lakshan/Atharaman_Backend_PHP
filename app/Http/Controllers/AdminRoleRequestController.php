@@ -75,8 +75,8 @@ class AdminRoleRequestController extends Controller
                         'vehicleOwnerName' => $request->extra_data['vehicleOwnerName'] ?? null,
                         'vehicleOwnerNic' => $request->extra_data['vehicleOwnerNic'] ?? null,
                         'businessMail' => $request->extra_data['businessMail'] ?? null,
-                        'personalNumber' => $request->extra_data['contactNumber'] ?? null, // Map contactNumber to personalNumber
-                        'whatsappNumber' => $request->extra_data['whatsappNumber'] ?? $request->extra_data['contactNumber'] ?? null,
+                        'personalNumber' => $request->extra_data['personalNumber'] ?? null,
+                        'whatsappNumber' => $request->extra_data['whatsappNumber'] ?? null,
                         'locations' => json_encode($request->extra_data['locations'] ?? []),
                         'description' => $request->extra_data['description'] ?? null,
                         'created_at' => now(),

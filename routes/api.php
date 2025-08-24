@@ -54,6 +54,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/role-request', [RoleRequestController::class, 'store']);
     // Logout - accessible to any authenticated user
     Route::post('/logout', [AuthController::class, 'logout']);
+    // Locations read access for all authenticated users
+    Route::get('/locations', [LocationsController::class, 'index']);
+    Route::get('/locations/{id}', [LocationsController::class, 'show']);
+    Route::get('locations/province/{province}', [LocationsController::class, 'getByProvince']);
+    // Routes to fetch shops/hotels/vehicles by owner
+    Route::get('shop-owners/{ownerId}/shops', [ShopController::class, 'getByOwner']);
+    Route::get('hotel-owners/{ownerId}/hotels', [HotelController::class, 'getByOwner']);
+    Route::get('vehicle-owners/{ownerId}/vehicles', [VehicleController::class, 'getByOwner']);
 });
 
 // Admin-only routes
@@ -62,31 +70,39 @@ Route::middleware(['auth:sanctum', 'role:Admin'])->get('/admin/dashboard', funct
 });
 
 Route::middleware(['auth:sanctum', 'role:Admin'])->group(function () {
-    // Get all users - Admin only
-    Route::get('/users', [AuthController::class, 'getUsers']);
+    Route::post('/locations', [LocationsController::class, 'store']);
+    Route::put('/locations/{id}', [LocationsController::class, 'update']);
+    Route::delete('/locations/{id}', [LocationsController::class, 'destroy']);
 
-    // Resource routes - Admin only
     Route::apiResource('guides', GuidesController::class);
     Route::get('guides/location/{location}', [GuidesController::class, 'getByLocation']);
+
     Route::apiResource('shop-owners', ShopOwnerController::class);
+
     Route::apiResource('hotel-owners', HotelOwnerController::class);
+
     Route::apiResource('vehicle-owners', VehicleOwnerController::class);
     Route::get('vehicle-owners/location/{location}', [VehicleOwnerController::class, 'getByLocation']);
-    Route::apiResource('vehicles', VehicleController::class);
-    Route::get('vehicles/location/{location}', [VehicleController::class, 'getByLocation']);
-    Route::apiResource('hotels', HotelController::class);
+
     Route::apiResource('shops', ShopController::class);
     Route::get('shops/location/{location}', [ShopController::class, 'getByLocation']);
-    Route::apiResource('locations', LocationsController::class);
-    Route::get('locations/province/{province}', [LocationsController::class, 'getByProvince']);
+
+    Route::apiResource('hotels', HotelController::class);
+    Route::get('hotels/location/{location}', [HotelController::class, 'getByLocation']);
+
+    Route::apiResource('vehicles', VehicleController::class);
+    Route::get('vehicles/location/{location}', [VehicleController::class, 'getByLocation']);
+
     Route::apiResource('items', ItemController::class);
     Route::apiResource('location-hotel-reviews', LocationHotelReviewsController::class);
     Route::apiResource('other-reviews', OtherReviewsController::class);
+    // Get all users
+    Route::get('/users', [AuthController::class, 'getUsers']);
     // Admin Registration & Management
     Route::post('/admin/users', [AuthController::class, 'registerAdmin']);
     Route::put('/admin/users/{id}', [AuthController::class, 'updateUser']);
     Route::delete('/admin/users/{id}', [AuthController::class, 'deleteUser']);
-    
+
     // Role management routes - Admin only
     Route::prefix('admin')->group(function () {
         Route::get('/role-requests', [AdminRoleRequestController::class, 'index']);
