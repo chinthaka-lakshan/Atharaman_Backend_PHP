@@ -44,6 +44,9 @@ Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
 Route::get('/all_guides', [GuidesController::class, 'index']);
 Route::get('/guides/{id}', [GuidesController::class, 'show']);
+Route::get('/all_hotels', [HotelController::class, 'index']);
+Route::get('/hotels/{id}', [HotelController::class, 'show']);
+Route::get('/hotelOwners/{id}', [HotelOwnerController::class, 'show']);
 
 // Authenticated routes (any logged-in user)
 Route::middleware(['auth:sanctum'])->group(function () {
