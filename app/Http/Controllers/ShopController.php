@@ -110,6 +110,12 @@ class ShopController extends Controller
         return response()->json($shops);
     }
 
+    public function getByOwner($ownerId)
+    {
+        $shops = Shop::where('shop_owner_id', $ownerId)->get();
+        return response()->json($shops);
+    }
+
     public function getByLocation($location)
     {
         $shops = Shop::whereJsonContains('locations', $location)->get();

@@ -134,6 +134,12 @@ class HotelController extends Controller
         return response()->json($hotel);
     }
 
+    public function getByOwner($ownerId)
+    {
+        $hotels = Hotel::where('hotel_owner_id', $ownerId)->get();
+        return response()->json($hotels);
+    }
+
     public function getByLocation($location)
     {
         $hotels = Hotel::whereJsonContains('locations', $location)->get();

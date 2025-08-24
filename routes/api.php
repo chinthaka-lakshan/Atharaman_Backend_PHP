@@ -58,6 +58,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/locations', [LocationsController::class, 'index']);
     Route::get('/locations/{id}', [LocationsController::class, 'show']);
     Route::get('locations/province/{province}', [LocationsController::class, 'getByProvince']);
+    // Routes to fetch shops/hotels/vehicles by owner
+    Route::get('shop-owners/{ownerId}/shops', [ShopController::class, 'getByOwner']);
+    Route::get('hotel-owners/{ownerId}/hotels', [HotelController::class, 'getByOwner']);
+    Route::get('vehicle-owners/{ownerId}/vehicles', [VehicleController::class, 'getByOwner']);
 });
 
 // Admin-only routes
