@@ -126,6 +126,12 @@ class VehicleController extends Controller
         ]);
     }
 
+    public function getByOwner($ownerId)
+    {
+        $vehicles = Vehicle::where('vehicle_owner_id', $ownerId)->get();
+        return response()->json($vehicles);
+    }
+
     public function getByLocation($location)
     {
         $vehicles = Vehicle::whereJsonContains('locations', $location)->get();
