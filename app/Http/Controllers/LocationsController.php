@@ -76,8 +76,11 @@ class LocationsController extends Controller
         if ($request->hasFile('locationImage')) {
             // Delete existing images from storage
             foreach ($existingImages as $oldImage) {
-                \Storage::disk('public')->delete($oldImage);
+                if ($oldImage && \Storage::disk('public')->exists($oldImage)) {
+                    \Storage::disk('public')->delete($oldImage);
+                }
             }
+
             // Store new images
             $newImages = [];
             foreach ($request->file('locationImage') as $image) {
@@ -88,7 +91,9 @@ class LocationsController extends Controller
         } elseif ($request->input('remove_images') === 'true') {
             // Explicit request to remove all images
             foreach ($existingImages as $oldImage) {
-                \Storage::disk('public')->delete($oldImage);
+                if ($oldImage && \Storage::disk('public')->exists($oldImage)) {
+                    \Storage::disk('public')->delete($oldImage);
+                }
             }
             $location->locationImage = [];
         }
@@ -114,7 +119,9 @@ class LocationsController extends Controller
         // Delete associated images
         $images = $location->locationImage ?? [];
         foreach ($images as $image) {
-            \Storage::disk('public')->delete($image);
+            if ($image && \Storage::disk('public')->exists($image)) {
+                \Storage::disk('public')->delete($image);
+            }
         }
 
         $location->delete();

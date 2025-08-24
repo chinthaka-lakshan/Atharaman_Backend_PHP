@@ -19,6 +19,8 @@ class HotelController extends Controller
             'locations' => 'nullable|array',
             'description' => 'nullable|string',
             'hotelImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'hotel_owner_id' => 'required|exists:hotel_owners,id',
+            'user_id' => 'required|exists:users,id'
         ]);
 
         $images = [];

@@ -19,6 +19,9 @@ class VehicleOwner extends Model
         'description',
         'user_id',
     ];
+    protected $casts = [
+        'locations' => 'array',
+    ];
     public function vehicle()
     {
         return $this->hasMany(Vehicle::class);
