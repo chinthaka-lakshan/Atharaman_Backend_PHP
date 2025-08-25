@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Auth;
 
 class ShopOwnerController extends Controller
 {
+    // Admin side methods
     public function store(Request $request)
     {
         $request->validate([
@@ -105,18 +106,6 @@ class ShopOwnerController extends Controller
         ]);
     }
 
-    public function show($id)
-    {
-        $shopOwner = ShopOwner::findOrFail($id);
-        return response()->json($shopOwner);
-    }
-
-    public function index()
-    {
-        $shopOwners = ShopOwner::all();
-        return response()->json($shopOwners);
-    }
-
     public function destroy($id)
     {
         try {
@@ -133,6 +122,12 @@ class ShopOwnerController extends Controller
                         ->where('user_id', $userId)
                         ->where('role_id', $shopOwnerRole->id)
                         ->delete();
+                    
+                    // DELETE the role requests record
+                    DB::table('role_requests')
+                        ->where('user_id', $shopOwner->user_id)
+                        ->where('role_id', $shopOwnerRole->id)
+                        ->delete();
                 }
 
                 $shopOwner->delete();
@@ -146,5 +141,85 @@ class ShopOwnerController extends Controller
                 'error' => 'Failed to delete shop owner: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    // User side methods
+    public function getByAuthenticatedUser(Request $request)
+    {
+        $shopOwner = ShopOwner::where('user_id', $request->user()->id)->first();
+        
+        if (!$shopOwner) {
+            return response()->json(['error' => 'Shop owner not found'], 404);
+        }
+        
+        return response()->json($shopOwner);
+    }
+
+    public function updateByAuthenticatedUser(Request $request)
+    {
+        $shopOwner = ShopOwner::where('user_id', $request->user()->id)->firstOrFail();
+
+        $validated = $request->validate([
+            'shopOwnerName' => 'sometimes|required|string|max:255',
+            'shopOwnerNic' => 'sometimes|required|string|max:255',
+            'businessMail' => 'sometimes|required|email',
+            'contactNumber' => 'sometimes|required|string|max:15',
+        ]);
+
+        $shopOwner->update($validated);
+
+        return response()->json([
+            'message' => 'Shop Owner updated successfully!',
+            'shopOwner' => $shopOwner->fresh()
+        ]);
+    }
+
+    public function deleteByAuthenticatedUser(Request $request)
+    {
+        try {
+            $shopOwner = ShopOwner::where('user_id', $request->user()->id)->firstOrFail();
+            
+            DB::transaction(function () use ($shopOwner) {
+                // Get the shop owner role
+                $shopOwnerRole = Role::where('name', 'shop_owner')->first();
+                
+                if ($shopOwnerRole) {
+                    // Remove the role from the user
+                    DB::table('role_user')
+                        ->where('user_id', $shopOwner->user_id)
+                        ->where('role_id', $shopOwnerRole->id)
+                        ->delete();
+                    
+                    // DELETE the role requests record
+                    DB::table('role_requests')
+                        ->where('user_id', $shopOwner->user_id)
+                        ->where('role_id', $shopOwnerRole->id)
+                        ->delete();
+                }
+
+                $shopOwner->delete();
+            });
+
+            return response()->json(['message' => 'Shop owner deleted successfully!']);
+
+        } catch (\Exception $e) {
+            \Log::error('Shop owner deletion failed: ' . $e->getMessage());
+            return response()->json([
+                'error' => 'Failed to delete shop owner: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // Public methods
+    public function show($id)
+    {
+        $shopOwner = ShopOwner::findOrFail($id);
+        return response()->json($shopOwner);
+    }
+
+    public function index()
+    {
+        $shopOwners = ShopOwner::all();
+        return response()->json($shopOwners);
     }
 }
