@@ -49,15 +49,15 @@ class User extends Authenticatable
     {
         return $this->hasOne(VehicleOwner::class);
     }
-    public function hotel()
+    public function hotels()
     {
         return $this->hasMany(Hotel::class);
     }
-    public function vehicle()
+    public function vehicles()
     {
         return $this->hasMany(Vehicle::class);
     }
-    public function shop()
+    public function shops()
     {
         return $this->hasMany(Shop::class);
     }
@@ -72,7 +72,7 @@ class User extends Authenticatable
 
 
     public function roles() {
-        return $this->belongsToMany(Role::class);
+        return $this->belongsToMany(Role::class, 'role_user', 'user_id', 'role_id');
     }
 
     public function roleRequests() {
@@ -81,6 +81,16 @@ class User extends Authenticatable
 
     public function hasRole($roleName) {
         return $this->roles()->where('name', $roleName)->exists();
+    }
+
+    // NEW METHOD: Check if user has any business roles
+    public function hasBusinessRole() {
+        return $this->roles()->whereIn('name', ['guide', 'shop_owner', 'hotel_owner', 'vehicle_owner'])->exists();
+    }
+
+    // NEW METHOD: Get all business roles user has
+    public function getBusinessRoles() {
+        return $this->roles()->whereIn('name', ['guide', 'shop_owner', 'hotel_owner', 'vehicle_owner'])->get();
     }
 
 
@@ -102,4 +112,16 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
     ];
+
+    // NEW: Add this method to easily load all relationships for profile
+    public function loadBusinessProfile() {
+        return $this->load([
+            'roles',
+            'guide',
+            'shopOwner', 
+            'hotelOwner',
+            'vehicleOwner',
+            'roleRequests'
+        ]);
+    }
 }

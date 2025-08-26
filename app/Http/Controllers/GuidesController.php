@@ -4,6 +4,10 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Guides;
+use App\Models\Role;
+use App\Models\User;
+use App\Models\RoleRequest;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 
 class GuidesController extends Controller
@@ -25,30 +29,79 @@ class GuidesController extends Controller
 
         $images = [];
         if ($request->hasFile('guideImage')) {
-            $images = [];
             foreach ($request->file('guideImage') as $image) {
                 $path = $image->store('guides', 'public');
                 $images[] = $path;
             }
         }
 
-        $guide = Guides::create([
-            'guideName' => $request->guideName,
-            'guideNic' => $request->guideNic,
-            'businessMail' => $request->businessMail,
-            'personalNumber' => $request->personalNumber,
-            'whatsappNumber' => $request->whatsappNumber,
-            'description' => $request->description,
-            'guideImage' => $images,
-            'languages' => $request->languages,
-            'locations' => $request->locations,
-            'user_id' => $request->user_id
-        ]);
+        // Get the guide role
+        $guideRole = Role::where('name', 'guide')->first();
+        
+        if (!$guideRole) {
+            return response()->json(['error' => 'Guide role not found'], 404);
+        }
 
-        return response()->json([
-            'message' => 'Guide created successfully!',
-            'guide' => $guide
-        ]);
+        // Get the user
+        $user = User::findOrFail($request->user_id);
+
+        try {
+            // Use DB transaction for data consistency
+            $guide = DB::transaction(function () use ($request, $images, $user, $guideRole) {
+                // Create the guide
+                $guide = Guides::create([
+                    'guideName' => $request->guideName,
+                    'guideNic' => $request->guideNic,
+                    'businessMail' => $request->businessMail,
+                    'personalNumber' => $request->personalNumber,
+                    'whatsappNumber' => $request->whatsappNumber,
+                    'description' => $request->description,
+                    'guideImage' => $images,
+                    'languages' => $request->languages,
+                    'locations' => $request->locations,
+                    'user_id' => $request->user_id
+                ]);
+
+                // Attach guide role to user if not already attached
+                // Use syncWithoutDetaching to avoid duplicates
+                $user->roles()->syncWithoutDetaching([$guideRole->id]);
+
+                // Create or update role request status to 'accepted'
+                RoleRequest::updateOrCreate(
+                    [
+                        'user_id' => $user->id,
+                        'role_id' => $guideRole->id,
+                    ],
+                    [
+                        'status' => 'accepted',
+                        'extra_data' => [
+                            'guideName' => $request->guideName,
+                            'guideNic' => $request->guideNic,
+                            'businessMail' => $request->businessMail,
+                            'personalNumber' => $request->personalNumber,
+                            'whatsappNumber' => $request->whatsappNumber,
+                            'guideImage' => $images,
+                            'languages' => $request->languages,
+                            'locations' => $request->locations,
+                            'description' => $request->description
+                        ]
+                    ]
+                );
+
+                return $guide;
+            });
+
+            return response()->json([
+                'message' => 'Guide created successfully!',
+                'guide' => $guide
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Guide creation failed: ' . $e->getMessage());
+            return response()->json([
+                'error' => 'Failed to create guide: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     public function update(Request $request, $id)
@@ -148,16 +201,38 @@ class GuidesController extends Controller
 
     public function destroy($id)
     {
-        $guide = Guides::findOrFail($id);
+        try {
+            $guide = Guides::findOrFail($id);
+            $userId = $guide->user_id;
 
-        // Delete associated images
-        $images = $guide->guideImage ?? [];
-        foreach ($images as $image) {
-            \Storage::disk('public')->delete($image);
+            DB::transaction(function () use ($guide, $userId) {
+                // Get the guide role
+                $guideRole = Role::where('name', 'guide')->first();
+                
+                if ($guideRole) {
+                    // Remove the role from the user
+                    DB::table('role_user')
+                        ->where('user_id', $userId)
+                        ->where('role_id', $guideRole->id)
+                        ->delete();
+                }
+
+                // Delete associated images
+                $images = $guide->guideImage ?? [];
+                foreach ($images as $image) {
+                    \Storage::disk('public')->delete($image);
+                }
+
+                $guide->delete();
+            });
+
+            return response()->json(['message' => 'Guide deleted successfully!']);
+
+        } catch (\Exception $e) {
+            \Log::error('Guide deletion failed: ' . $e->getMessage());
+            return response()->json([
+                'error' => 'Failed to delete guide: ' . $e->getMessage()
+            ], 500);
         }
-
-        $guide->delete();
-
-        return response()->json(['message' => 'Guide deleted successfully!']);
     }
 }
