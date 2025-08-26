@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Auth;
 
 class VehicleOwnerController extends Controller
 {
+    // Admin side methods
     public function store(Request $request)
     {
         $request->validate([
@@ -121,18 +122,6 @@ class VehicleOwnerController extends Controller
         ]);
     }
 
-    public function index()
-    {
-        $vehicleOwners = VehicleOwner::all();
-        return response()->json($vehicleOwners);
-    }
-
-    public function show($id)
-    {
-        $vehicleOwner = VehicleOwner::findOrFail($id);
-        return response()->json($vehicleOwner);
-    }
-
     public function destroy($id)
     {
         try {
@@ -149,6 +138,12 @@ class VehicleOwnerController extends Controller
                         ->where('user_id', $userId)
                         ->where('role_id', $vehicleOwnerRole->id)
                         ->delete();
+
+                    // DELETE the role requests record
+                    DB::table('role_requests')
+                        ->where('user_id', $vehicleOwner->user_id)
+                        ->where('role_id', $vehicleOwnerRole->id)
+                        ->delete();
                 }
 
                 $vehicleOwner->delete();
@@ -162,6 +157,89 @@ class VehicleOwnerController extends Controller
                 'error' => 'Failed to delete vehicle owner: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    // User side methods
+    public function getByAuthenticatedUser(Request $request)
+    {
+        $vehicleOwner = VehicleOwner::where('user_id', $request->user()->id)->first();
+        
+        if (!$vehicleOwner) {
+            return response()->json(['error' => 'Vehicle owner not found'], 404);
+        }
+        
+        return response()->json($vehicleOwner);
+    }
+
+    public function updateByAuthenticatedUser(Request $request)
+    {
+        $vehicleOwner = VehicleOwner::where('user_id', $request->user()->id)->firstOrFail();
+
+        $validated = $request->validate([
+            'vehicleOwnerName' => 'sometimes|required|string|max:255',
+            'vehicleOwnerNic' => 'sometimes|required|string|max:255',
+            'businessMail' => 'sometimes|required|email',
+            'personalNumber' => 'sometimes|required|string|max:15',
+            'whatsappNumber' => 'nullable|string|max:15',
+            'locations' => 'nullable|array',
+            'description' => 'nullable|string'
+        ]);
+
+        $vehicleOwner->update($validated);
+
+        return response()->json([
+            'message' => 'Vehicle Owner updated successfully!',
+            'vehicleOwner' => $vehicleOwner->fresh()
+        ]);
+    }
+
+    public function deleteByAuthenticatedUser(Request $request)
+    {
+        try {
+            $vehicleOwner = VehicleOwner::where('user_id', $request->user()->id)->firstOrFail();
+            
+            DB::transaction(function () use ($vehicleOwner) {
+                // Get the vehicle owner role
+                $vehicleOwnerRole = Role::where('name', 'vehicle_owner')->first();
+                
+                if ($vehicleOwnerRole) {
+                    // Remove the role from the user
+                    DB::table('role_user')
+                        ->where('user_id', $vehicleOwner->user_id)
+                        ->where('role_id', $vehicleOwnerRole->id)
+                        ->delete();
+                    
+                    // DELETE the role requests record
+                    DB::table('role_requests')
+                        ->where('user_id', $vehicleOwner->user_id)
+                        ->where('role_id', $vehicleOwnerRole->id)
+                        ->delete();
+                }
+
+                $vehicleOwner->delete();
+            });
+
+            return response()->json(['message' => 'Vehicle owner deleted successfully!']);
+
+        } catch (\Exception $e) {
+            \Log::error('Vehicle owner deletion failed: ' . $e->getMessage());
+            return response()->json([
+                'error' => 'Failed to delete vehicle owner: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // Public methods
+    public function show($id)
+    {
+        $vehicleOwner = VehicleOwner::findOrFail($id);
+        return response()->json($vehicleOwner);
+    }
+
+    public function index()
+    {
+        $vehicleOwners = VehicleOwner::all();
+        return response()->json($vehicleOwners);
     }
 
     public function getByLocation($location)

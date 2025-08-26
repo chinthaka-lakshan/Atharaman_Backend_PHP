@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Auth;
 
 class HotelOwnerController extends Controller
 {
+    // Admin side methods
     public function store(Request $request)
     {
         $request->validate([
@@ -92,6 +93,7 @@ class HotelOwnerController extends Controller
             'user_id' => 'sometimes|required|exists:users,id'
         ]);
 
+        // Update other fields
         $hotelOwner->fill($request->only([
             'hotelOwnerName', 'hotelOwnerNic', 'businessMail', 'contactNumber'
         ]));
@@ -102,18 +104,6 @@ class HotelOwnerController extends Controller
             'message' => 'Hotel Owner updated successfully!',
             'hotelOwner' => $hotelOwner->fresh()
         ]);
-    }
-
-    public function index()
-    {
-        $hotelOwners = HotelOwner::all();
-        return response()->json($hotelOwners);
-    }
-
-    public function show($id)
-    {
-        $hotelOwner = HotelOwner::findOrFail($id);
-        return response()->json($hotelOwner);
     }
 
     public function destroy($id)
@@ -132,6 +122,12 @@ class HotelOwnerController extends Controller
                         ->where('user_id', $userId)
                         ->where('role_id', $hotelOwnerRole->id)
                         ->delete();
+
+                    // DELETE the role requests record
+                    DB::table('role_requests')
+                        ->where('user_id', $hotelOwner->user_id)
+                        ->where('role_id', $hotelOwnerRole->id)
+                        ->delete();
                 }
 
                 $hotelOwner->delete();
@@ -145,5 +141,85 @@ class HotelOwnerController extends Controller
                 'error' => 'Failed to delete hotel owner: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    // User side methods
+    public function getByAuthenticatedUser(Request $request)
+    {
+        $hotelOwner = HotelOwner::where('user_id', $request->user()->id)->first();
+        
+        if (!$hotelOwner) {
+            return response()->json(['error' => 'Hotel owner not found'], 404);
+        }
+        
+        return response()->json($hotelOwner);
+    }
+
+    public function updateByAuthenticatedUser(Request $request)
+    {
+        $hotelOwner = HotelOwner::where('user_id', $request->user()->id)->firstOrFail();
+
+        $validated = $request->validate([
+            'hotelOwnerName' => 'sometimes|required|string|max:255',
+            'hotelOwnerNic' => 'sometimes|required|string|max:255',
+            'businessMail' => 'sometimes|required|email',
+            'contactNumber' => 'sometimes|required|string|max:15',
+        ]);
+
+        $hotelOwner->update($validated);
+
+        return response()->json([
+            'message' => 'Hotel Owner updated successfully!',
+            'hotelOwner' => $hotelOwner->fresh()
+        ]);
+    }
+
+    public function deleteByAuthenticatedUser(Request $request)
+    {
+        try {
+            $hotelOwner = HotelOwner::where('user_id', $request->user()->id)->firstOrFail();
+            
+            DB::transaction(function () use ($hotelOwner) {
+                // Get the hotel owner role
+                $hotelOwnerRole = Role::where('name', 'hotel_owner')->first();
+                
+                if ($hotelOwnerRole) {
+                    // Remove the role from the user
+                    DB::table('role_user')
+                        ->where('user_id', $hotelOwner->user_id)
+                        ->where('role_id', $hotelOwnerRole->id)
+                        ->delete();
+                    
+                    // DELETE the role requests record
+                    DB::table('role_requests')
+                        ->where('user_id', $hotelOwner->user_id)
+                        ->where('role_id', $hotelOwnerRole->id)
+                        ->delete();
+                }
+
+                $hotelOwner->delete();
+            });
+
+            return response()->json(['message' => 'Hotel owner deleted successfully!']);
+
+        } catch (\Exception $e) {
+            \Log::error('Hotel owner deletion failed: ' . $e->getMessage());
+            return response()->json([
+                'error' => 'Failed to delete hotel owner: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // Public methods
+    public function show($id)
+    {
+        $hotelOwner = HotelOwner::findOrFail($id);
+        return response()->json($hotelOwner);
+    }
+
+    public function index()
+    {
+        $hotelOwners = HotelOwner::all();
+        return response()->json($hotelOwners);
     }
 }

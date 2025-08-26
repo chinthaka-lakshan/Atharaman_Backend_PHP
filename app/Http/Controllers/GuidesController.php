@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Auth;
 
 class GuidesController extends Controller
 {
+    // Admin side methods
     public function store(Request $request)
     {
         $request->validate([
@@ -48,7 +49,6 @@ class GuidesController extends Controller
         try {
             // Use DB transaction for data consistency
             $guide = DB::transaction(function () use ($request, $images, $user, $guideRole) {
-                // Create the guide
                 $guide = Guides::create([
                     'guideName' => $request->guideName,
                     'guideNic' => $request->guideNic,
@@ -181,24 +181,6 @@ class GuidesController extends Controller
         ]);
     }
 
-    public function show($id)
-    {
-        $guide = Guides::findOrFail($id);
-        return response()->json($guide);
-    }
-    
-    public function index()
-    {
-        $guides = Guides::all();
-        return response()->json($guides);
-    }
-
-    public function getByLocation($location)
-    {
-        $guides = Guides::where('locations', 'LIKE', "%{$location}%")->get();
-        return response()->json($guides);
-    }
-
     public function destroy($id)
     {
         try {
@@ -213,6 +195,12 @@ class GuidesController extends Controller
                     // Remove the role from the user
                     DB::table('role_user')
                         ->where('user_id', $userId)
+                        ->where('role_id', $guideRole->id)
+                        ->delete();
+                    
+                    // DELETE the role requests record
+                    DB::table('role_requests')
+                        ->where('user_id', $guide->user_id)
                         ->where('role_id', $guideRole->id)
                         ->delete();
                 }
@@ -234,5 +222,156 @@ class GuidesController extends Controller
                 'error' => 'Failed to delete guide: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    // User side methods
+    public function getByAuthenticatedUser(Request $request)
+    {
+        $guide = Guides::where('user_id', $request->user()->id)->first();
+        
+        if (!$guide) {
+            return response()->json(['error' => 'Guide not found'], 404);
+        }
+        
+        return response()->json($guide);
+    }
+
+    public function updateByAuthenticatedUser(Request $request)
+    {
+        $guide = Guides::where('user_id', $request->user()->id)->firstOrFail();
+
+        $existingImages = $guide->guideImage ?? [];
+
+        $validated = $request->validate([
+            'guideName' => 'sometimes|required|string|max:255',
+            'guideNic' => 'sometimes|required|string|max:255',
+            'businessMail' => 'sometimes|required|email',
+            'personalNumber' => 'sometimes|required|string|max:15',
+            'whatsappNumber' => 'nullable|string|max:15',
+            'guideImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'languages' => 'nullable|array',
+            'locations' => 'nullable|array',
+            'description' => 'nullable|string',
+            'remove_images' => 'nullable|array', // For individual image removal
+            'remove_images.*' => 'nullable|string' // Image paths to remove
+        ]);
+
+        // Handle individual image removal first
+        if ($request->has('remove_images') && is_array($request->remove_images)) {
+            foreach ($request->remove_images as $imageToRemove) {
+                // Find and remove the image from existing images array
+                if (($key = array_search($imageToRemove, $existingImages)) !== false) {
+                    \Storage::disk('public')->delete($existingImages[$key]);
+                    unset($existingImages[$key]);
+                }
+            }
+            // Reindex the array
+            $existingImages = array_values($existingImages);
+            $guide->guideImage = $existingImages;
+        }
+
+        // Handle new image uploads
+        if ($request->hasFile('guideImage')) {
+            $newImages = [];
+            foreach ($request->file('guideImage') as $image) {
+                $path = $image->store('guides', 'public');
+                $newImages[] = $path;
+            }
+            
+            // If we have existing images after removal, merge with new ones
+            if (!empty($existingImages)) {
+                $guide->guideImage = array_merge($existingImages, $newImages);
+            } else {
+                $guide->guideImage = $newImages;
+            }
+        } elseif ($request->input('remove_all_images') === 'true') {
+            // Handle explicit request to remove all images
+            foreach ($existingImages as $oldImage) {
+                \Storage::disk('public')->delete($oldImage);
+            }
+            $guide->guideImage = [];
+        }
+
+        // Update other fields
+        $guide->fill($request->only([
+            'guideName', 'guideNic', 'businessMail', 
+            'personalNumber', 'whatsappNumber', 'description'
+        ]));
+
+        if ($request->has('languages')) {
+            $guide->languages = $request->languages;
+        }
+
+        if ($request->has('locations')) {
+            $guide->locations = $request->locations;
+        }
+
+        $guide->save();
+
+        return response()->json([
+            'message' => 'Guide updated successfully!',
+            'guide' => $guide->fresh()
+        ]);
+    }
+
+    public function deleteByAuthenticatedUser(Request $request)
+    {
+        try {
+            $guide = Guides::where('user_id', $request->user()->id)->firstOrFail();
+            
+            DB::transaction(function () use ($guide) {
+                // Get the guide role
+                $guideRole = Role::where('name', 'guide')->first();
+                
+                if ($guideRole) {
+                    // Remove the role from the user
+                    DB::table('role_user')
+                        ->where('user_id', $guide->user_id)
+                        ->where('role_id', $guideRole->id)
+                        ->delete();
+                    
+                    // DELETE the role requests record
+                    DB::table('role_requests')
+                        ->where('user_id', $guide->user_id)
+                        ->where('role_id', $guideRole->id)
+                        ->delete();
+                }
+
+                // Delete associated images
+                $images = $guide->guideImage ?? [];
+                foreach ($images as $image) {
+                    \Storage::disk('public')->delete($image);
+                }
+
+                $guide->delete();
+            });
+
+            return response()->json(['message' => 'Guide deleted successfully!']);
+
+        } catch (\Exception $e) {
+            \Log::error('Guide deletion failed: ' . $e->getMessage());
+            return response()->json([
+                'error' => 'Failed to delete guide: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // Public methods
+    public function show($id)
+    {
+        $guide = Guides::findOrFail($id);
+        return response()->json($guide);
+    }
+    
+    public function index()
+    {
+        $guides = Guides::all();
+        return response()->json($guides);
+    }
+
+    public function getByLocation($location)
+    {
+        $guides = Guides::where('locations', 'LIKE', "%{$location}%")->get();
+        return response()->json($guides);
     }
 }
