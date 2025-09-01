@@ -101,6 +101,12 @@ class ItemController extends Controller
         ]);
     }
 
+    public function getByShop($shopId)
+    {
+        $items = Item::where('shop_id', $shopId)->get();
+        return response()->json($items);
+    }   
+
     public function destroy($id)
     {
         $item = Item::find($id);
