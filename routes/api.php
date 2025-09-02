@@ -56,6 +56,7 @@ Route::get('/shop-owners/{ownerId}/shops', [ShopController::class, 'getByOwner']
 Route::get('/shops', [ShopController::class, 'index']);
 Route::get('/shops/{id}', [ShopController::class, 'show']);
 Route::get('/shops/location/{location}', [ShopController::class, 'getByLocation']);
+Route::get('/shops/{shopId}/items', [ItemController::class, 'getByShop']);
 
 Route::get('/hotel-owners', [HotelOwnerController::class, 'index']);
 Route::get('/hotel-owners/{id}', [HotelOwnerController::class, 'show']);
