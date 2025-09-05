@@ -13,13 +13,19 @@ return new class extends Migration
      */
     public function up()
     {
-        Schema::create('other_reviews', function (Blueprint $table) {
+        Schema::create('reviews', function (Blueprint $table) {
             $table->id();
-            $table->string('review');
-            $table->integer('rating');
-            $table->string('type'); 
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->string('entity_type', 20); // 'location', 'guide', 'shop', 'hotel', 'vehicle'
+            $table->unsignedBigInteger('entity_id');
+            $table->integer('rating')->unsigned()->check('rating >= 1 AND rating <= 5');
+            $table->text('comment')->nullable();
+            $table->json('images')->nullable(); // Array of image URLs (max 5)
             $table->timestamps();
+            
+            // Composite index for efficient querying
+            $table->index(['entity_type', 'entity_id']);
+            $table->index('user_id');
         });
     }
 
@@ -30,6 +36,6 @@ return new class extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists('other_reviews');
+        Schema::dropIfExists('reviews');
     }
 };
