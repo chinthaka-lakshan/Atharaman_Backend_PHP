@@ -13,14 +13,15 @@ return new class extends Migration
      */
     public function up()
     {
-        Schema::create('location_hotel_reviews', function (Blueprint $table) {
+        Schema::create('website_reviews', function (Blueprint $table) {
             $table->id();
-            $table->integer('rating')->min(1)->max(5);
-            $table->string('comment')->nullable();
-            $table->string('type'); 
-            $table->json('reviewImages')->nullable();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->integer('rating')->unsigned()->check('rating >= 1 AND rating <= 5');
+            $table->text('comment')->nullable();
             $table->timestamps();
+            
+            // Index for better performance
+            $table->index('user_id');
         });
     }
 
@@ -31,6 +32,6 @@ return new class extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists('location_hotel_reviews');
+        Schema::dropIfExists('website_reviews');
     }
 };

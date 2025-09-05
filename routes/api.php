@@ -13,8 +13,8 @@ use App\Models\Hotel;
 use App\Models\Shop;
 use App\Models\Location;
 use App\Models\Item;
-use App\Models\LocationHotelReviews;
-use App\Models\OtherReviews;
+use App\Models\Review;
+use App\Models\WebsiteReview;
 use App\Models\TouristSpot;
 use App\Http\Controllers\ChatbotController;
 use App\Http\Controllers\Controller;
@@ -27,8 +27,8 @@ use App\Http\Controllers\HotelController;
 use App\Http\Controllers\ShopController;
 use App\Http\Controllers\LocationsController;
 use App\Http\Controllers\ItemController;
-use App\Http\Controllers\LocationHotelReviewsController;
-use App\Http\Controllers\OtherReviewsController;
+use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\WebsiteReviewController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\RoleRequestController;
 use App\Http\Controllers\AdminRoleRequestController;
@@ -71,6 +71,11 @@ Route::get('/vehicle-owners/{ownerId}/vehicles', [VehicleController::class, 'get
 Route::get('/vehicles', [VehicleController::class, 'index']);
 Route::get('/vehicles/{id}', [VehicleController::class, 'show']);
 Route::get('/vehicles/location/{location}', [VehicleController::class, 'getByLocation']);
+
+// Public review routes
+Route::get('/reviews/entity/{entityType}/{entityId}', [ReviewController::class, 'getReviewsByEntity']);
+Route::get('/website-reviews', [WebsiteReviewController::class, 'index']);
+Route::get('/website-reviews/recent/{limit?}', [WebsiteReviewController::class, 'getRecentReviews']);
 
 // Authenticated routes (any logged-in user)
 Route::middleware(['auth:sanctum'])->group(function () {
@@ -115,6 +120,19 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/my-vehicles', [VehicleController::class, 'storeByAuthenticatedOwner']);
     Route::put('/my-vehicles/{id}', [VehicleController::class, 'updateByAuthenticatedOwner']);
     Route::delete('/my-vehicles/{id}', [VehicleController::class, 'deleteByAuthenticatedOwner']);
+    // Review routes
+    Route::get('/reviews', [ReviewController::class, 'index']);
+    Route::get('/reviews/{id}', [ReviewController::class, 'show']);
+    Route::post('/reviews', [ReviewController::class, 'store']);
+    Route::put('/reviews/{id}', [ReviewController::class, 'update']);
+    Route::delete('/reviews/{id}', [ReviewController::class, 'destroy']);
+    Route::get('/user/reviews', [ReviewController::class, 'getUserReviews']);
+    // Website review routes
+    Route::get('/website-reviews/{id}', [WebsiteReviewController::class, 'show']);
+    Route::post('/website-reviews', [WebsiteReviewController::class, 'store']);
+    Route::post('/website-reviews/{id}', [WebsiteReviewController::class, 'update']);
+    Route::delete('/website-reviews/{id}', [WebsiteReviewController::class, 'destroy']);
+    Route::get('/user/website-reviews', [WebsiteReviewController::class, 'getUserWebsiteReviews']);
 });
 
 // Admin-only routes
