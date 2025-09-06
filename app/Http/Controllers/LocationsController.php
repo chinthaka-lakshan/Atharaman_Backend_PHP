@@ -22,6 +22,11 @@ class LocationsController extends Controller
 
     public function store(Request $request)
     {
+        // Check if user is admin
+        if (Auth::user()->role !== 'Admin') {
+            return response()->json(['error' => 'Unauthorized. Admin access required.'], 403);
+        }
+
         $request->validate([
             'locationName' => 'required|string|max:255',
             'shortDescription' => 'nullable|string|max:500',
@@ -59,6 +64,11 @@ class LocationsController extends Controller
 
     public function update(Request $request, $id)
     {
+        // Check if user is admin
+        if (Auth::user()->role !== 'Admin') {
+            return response()->json(['error' => 'Unauthorized. Admin access required.'], 403);
+        }
+
         $location = Location::findorFail($id);
         $existingImages = $location->locationImage ?? [];
 
@@ -114,6 +124,11 @@ class LocationsController extends Controller
 
     public function destroy($id)
     {
+        // Check if user is admin
+        if (Auth::user()->role !== 'Admin') {
+            return response()->json(['error' => 'Unauthorized. Admin access required.'], 403);
+        }
+
         $location = Location::findOrFail($id);
 
         // Delete associated images
