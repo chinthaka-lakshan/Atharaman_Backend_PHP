@@ -6,6 +6,7 @@ use App\Models\Role;
 use App\Models\RoleRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class RoleRequestController extends Controller
 {
@@ -80,6 +81,28 @@ class RoleRequestController extends Controller
 
         $request->validate($extraDataRules);
 
+        // Handle image uploads for guide role
+        $uploadedImages = [];
+        if ($role->name === 'guide' && !empty($request->extra_data['guideImage'])) {
+            foreach ($request->extra_data['guideImage'] as $imageData) {
+                // Handle base64 images
+                if (is_string($imageData) && strpos($imageData, 'data:image/') === 0) {
+                    // This is a base64 image - save it properly
+                    $imagePath = $this->saveBase64Image($imageData, 'guides');
+                    $uploadedImages[] = $imagePath;
+                } else {
+                    // This is already a filename or invalid data
+                    $uploadedImages[] = $imageData;
+                }
+            }
+            
+            // Update the extra_data with processed images
+            $request->merge(['extra_data' => array_merge(
+                $request->extra_data,
+                ['guideImage' => $uploadedImages]
+            )]);
+        }
+
         // Save request
         RoleRequest::create([
             'user_id' => $user->id,
@@ -89,5 +112,21 @@ class RoleRequestController extends Controller
         ]);
 
         return response()->json(['message' => 'Request submitted successfully']);
+    }
+
+    // Add this helper method
+    private function saveBase64Image($base64Data, $folder = 'guides')
+    {
+        list($type, $data) = explode(';', $base64Data);
+        list(, $data) = explode(',', $data);
+        $data = base64_decode($data);
+        
+        $extension = explode('/', $type)[1];
+        $filename = uniqid() . '.' . $extension;
+        $path = $folder . '/' . $filename;
+        
+        Storage::disk('public')->put($path, $data);
+        
+        return $path;
     }
 }
