@@ -11,14 +11,14 @@ class ReviewController extends Controller
 {
     public function index()
     {
-        // Retrieve all reviews with user data
+        // Retrieve all reviews with user data - accessible to everyone
         $reviews = Review::with('user')->get();
         return response()->json($reviews);
     }
 
     public function show($id)
     {
-        // Retrieve a specific review with user data
+        // Retrieve a specific review with user data - accessible to everyone
         $review = Review::with('user')->find($id);
         if ($review) {
             return response()->json($review);
@@ -28,6 +28,11 @@ class ReviewController extends Controller
 
     public function store(Request $request)
     {
+        // Check if user is authenticated - only logged in users can create reviews
+        if (!Auth::check()) {
+            return response()->json(['message' => 'Unauthorized. Please log in to submit reviews.'], 401);
+        }
+
         // Validate the request
         $validatedData = $request->validate([
             'entity_type' => 'required|string|in:location,hotel,guide,shop,vehicle',
@@ -65,6 +70,11 @@ class ReviewController extends Controller
 
     public function update(Request $request, $id)
     {
+        // Check if user is authenticated - only logged in users can update reviews
+        if (!Auth::check()) {
+            return response()->json(['message' => 'Unauthorized. Please log in to update reviews.'], 401);
+        }
+
         // Validate the request
         $validatedData = $request->validate([
             'rating' => 'sometimes|required|integer|min:1|max:5',
@@ -82,7 +92,7 @@ class ReviewController extends Controller
 
         // Check if user owns the review
         if ($review->user_id !== Auth::id()) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+            return response()->json(['message' => 'Unauthorized. You can only edit your own reviews.'], 403);
         }
 
         // Get existing images
@@ -121,14 +131,19 @@ class ReviewController extends Controller
 
     public function destroy($id)
     {
+        // Check if user is authenticated
+        if (!Auth::check()) {
+            return response()->json(['message' => 'Unauthorized. Please log in to delete reviews.'], 401);
+        }
+
         $review = Review::find($id);
         if (!$review) {
             return response()->json(['message' => 'Review not found'], 404);
         }
 
-        // Check if user owns the review
-        if ($review->user_id !== Auth::id()) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+        // Check if user owns the review or is admin
+        if ($review->user_id !== Auth::id() && Auth::user()->role !== 'Admin') {
+            return response()->json(['message' => 'Unauthorized. You can only delete your own reviews.'], 403);
         }
 
         // Delete associated images
@@ -153,6 +168,7 @@ class ReviewController extends Controller
         $reviews = Review::with('user')
             ->where('entity_type', $entityType)
             ->where('entity_id', $entityId)
+            ->orderBy('created_at', 'desc')
             ->get();
 
         if ($reviews->isEmpty()) {
@@ -164,9 +180,15 @@ class ReviewController extends Controller
 
     public function getUserReviews()
     {
+        // Check if user is authenticated - only logged in users can view their own reviews
+        if (!Auth::check()) {
+            return response()->json(['message' => 'Unauthorized. Please log in to view your reviews.'], 401);
+        }
+
         // Get all reviews by the authenticated user
         $reviews = Review::with('user')
             ->where('user_id', Auth::id())
+            ->orderBy('created_at', 'desc')
             ->get();
 
         return response()->json($reviews);
