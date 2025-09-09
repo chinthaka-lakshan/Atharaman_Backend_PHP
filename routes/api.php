@@ -102,6 +102,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/my-shops', [ShopController::class, 'storeByAuthenticatedOwner']);
     Route::put('/my-shops/{id}', [ShopController::class, 'updateByAuthenticatedOwner']);
     Route::delete('/my-shops/{id}', [ShopController::class, 'deleteByAuthenticatedOwner']);
+    // Routes for items of authenticated user
+    Route::get('/my-items', [ItemController::class, 'getByAuthenticatedUser']);
+    Route::post('/my-items', [ItemController::class, 'storeByAuthenticatedUser']);
+    Route::put('/my-items/{id}', [ItemController::class, 'updateByAuthenticatedUser']);
+    Route::delete('/my-items/{id}', [ItemController::class, 'deleteByAuthenticatedUser']);
+    Route::get('/my-shops/{shopId}/items', [ItemController::class, 'getByAuthenticatedShop']);
     // Routes for hotel owner of authenticated user
     Route::get('/my-hotel-owner', [HotelOwnerController::class, 'getByAuthenticatedUser']);
     Route::put('/my-hotel-owner', [HotelOwnerController::class, 'updateByAuthenticatedUser']);
