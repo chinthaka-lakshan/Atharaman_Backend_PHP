@@ -2,27 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Location;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
+use App\Models\Location;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class LocationsController extends Controller
 {
-    public function index()
-    {
-        $locations = Location::all();
-        return response()->json($locations);
-    }
-
-    public function show($id)
-    {
-        $location = Location::findOrFail($id);
-        return response()->json($location);
-    }
-
     public function store(Request $request)
     {
-        // Check if user is admin
+        // Check if user is Admin
         if (Auth::user()->role !== 'Admin') {
             return response()->json(['error' => 'Unauthorized. Admin access required.'], 403);
         }
@@ -155,5 +144,17 @@ class LocationsController extends Controller
         return response()->json([
             'locations' => $locations
         ]);
+    }
+
+    public function show($id)
+    {
+        $location = Location::findOrFail($id);
+        return response()->json($location);
+    }
+
+    public function index()
+    {
+        $locations = Location::all();
+        return response()->json($locations);
     }
 }

@@ -30,6 +30,7 @@ class GuidesController extends Controller
 
         $images = [];
         if ($request->hasFile('guideImage')) {
+            $images = [];
             foreach ($request->file('guideImage') as $image) {
                 $path = $image->store('guides', 'public');
                 $images[] = $path;
