@@ -24,6 +24,7 @@ class LocationsController extends Controller
             'latitude' => 'required|numeric',
             'longitude' => 'required|numeric',
             'locationImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'locationType' => 'required|string|max:100',
         ]);
 
         $images = [];
@@ -42,7 +43,8 @@ class LocationsController extends Controller
             'province' => $request->province,
             'latitude' => $request->latitude,
             'longitude' => $request->longitude,
-            'locationImage' => $images
+            'locationImage' => $images,
+            'locationType' => $request->locationType
         ]);
 
         return response()->json([
@@ -69,6 +71,7 @@ class LocationsController extends Controller
             'latitude' => 'sometimes|required|numeric',
             'longitude' => 'sometimes|required|numeric',
             'locationImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'locationType' => 'sometimes|required|string|max:100',
         ]);
 
         // Handle image updates
@@ -100,7 +103,7 @@ class LocationsController extends Controller
         // Update other fields
         $location->fill($request->only([
             'locationName', 'shortDescription', 'longDescription',
-            'province', 'latitude', 'longitude'
+            'province', 'latitude', 'longitude', 'locationType'
         ]));
 
         $location->save();
@@ -139,6 +142,19 @@ class LocationsController extends Controller
 
         if ($locations->isEmpty()) {
             return response()->json(['message' => 'No locations found for this province'], 404);
+        }
+
+        return response()->json([
+            'locations' => $locations
+        ]);
+    }
+
+    public function getByType($type)
+    {
+        $locations = Location::where('locationType', $type)->get();
+
+        if ($locations->isEmpty()) {
+            return response()->json(['message' => 'No locations found for this type'], 404);
         }
 
         return response()->json([

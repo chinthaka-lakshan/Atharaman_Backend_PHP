@@ -22,6 +22,7 @@ return new class extends Migration
             $table->double('latitude');
             $table->double('longitude');
             $table->json('locationImage')->nullable();
+            $table->string('locationType');
             $table->timestamps();
         });
     }

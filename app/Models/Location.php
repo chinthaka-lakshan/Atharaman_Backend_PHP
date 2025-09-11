@@ -16,6 +16,7 @@ class Location extends Model
         'latitude',
         'longitude',
         'locationImage',
+        'locationType',
     ];
     protected $casts = [
         'locationImage' => 'array',
