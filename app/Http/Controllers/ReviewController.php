@@ -171,10 +171,7 @@ class ReviewController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
-        if ($reviews->isEmpty()) {
-            return response()->json(['message' => 'No reviews found for this entity'], 404);
-        }
-
+        // Return empty array instead of 404 when no reviews found
         return response()->json($reviews);
     }
 
