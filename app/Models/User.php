@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use App\Notifications\CustomResetPassword;
 
 class User extends Authenticatable
 {
@@ -92,6 +93,14 @@ class User extends Authenticatable
     public function getBusinessRoles() {
         return $this->roles()->whereIn('name', ['guide', 'shop_owner', 'hotel_owner', 'vehicle_owner'])->get();
     }
+
+
+   public function sendPasswordResetNotification($token)
+{
+    $url = config('app.frontend_url') . '/reset-password?token=' . $token . '&email=' . urlencode($this->email);
+
+    $this->notify(new CustomResetPassword($token, $url));
+}
 
 
     /**
