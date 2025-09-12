@@ -4,6 +4,10 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Location;
+use App\Models\Guides;
+use App\Models\Shop;
+use App\Models\Hotel;
+use App\Models\Vehicle;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 
@@ -172,5 +176,60 @@ class LocationsController extends Controller
     {
         $locations = Location::all();
         return response()->json($locations);
+    }
+
+    // Get all related data for a specific location (guides, shops, hotels, vehicles)
+    public function getRelatedData($id)
+    {
+        try {
+            // Get the location to extract the location name
+            $location = Location::findOrFail($id);
+            $locationName = $location->locationName;
+            
+            // Fetch all related data
+            $results = [
+                'guides' => $this->getGuidesByLocation($locationName),
+                'shops' => $this->getShopsByLocation($locationName),
+                'hotels' => $this->getHotelsByLocation($locationName),
+                'vehicles' => $this->getVehiclesByLocation($locationName),
+            ];
+            
+            return response()->json([
+                'success' => true,
+                'data' => $results
+            ]);
+            
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Location not found'
+            ], 404);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch location related data: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // Helper methods
+    private function getGuidesByLocation($locationName)
+    {
+        return Guides::where('locations', 'LIKE', "%{$locationName}%")->get();
+    }
+
+    private function getShopsByLocation($locationName)
+    {
+        return Shop::whereJsonContains('locations', $locationName)->get();
+    }
+
+    private function getHotelsByLocation($locationName)
+    {
+        return Hotel::whereJsonContains('locations', $locationName)->get();
+    }
+
+    private function getVehiclesByLocation($locationName)
+    {
+        return Vehicle::whereJsonContains('locations', $locationName)->get();
     }
 }

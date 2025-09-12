@@ -45,6 +45,7 @@ Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 Route::get('/locations', [LocationsController::class, 'index']);
 Route::get('/locations/{id}', [LocationsController::class, 'show']);
 Route::get('/locations/province/{province}', [LocationsController::class, 'getByProvince']);
+Route::get('/locations/{id}/related-data', [LocationsController::class, 'getRelatedData']);
 
 Route::get('/guides', [GuidesController::class, 'index']);
 Route::get('/guides/{id}', [GuidesController::class, 'show']);
