@@ -8,6 +8,7 @@ use App\Models\Guides;
 use App\Models\Shop;
 use App\Models\Hotel;
 use App\Models\Vehicle;
+use App\Models\Review;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 
@@ -168,13 +169,21 @@ class LocationsController extends Controller
 
     public function show($id)
     {
-        $location = Location::findOrFail($id);
+        $location = Location::withCount('reviews')
+                    ->withAvg('reviews', 'rating')
+                    ->with('reviews')
+                    ->findOrFail($id);
+        
         return response()->json($location);
     }
 
     public function index()
     {
-        $locations = Location::all();
+        $locations = Location::withCount('reviews')
+                    ->withAvg('reviews', 'rating')
+                    ->with('reviews')
+                    ->get();
+        
         return response()->json($locations);
     }
 
