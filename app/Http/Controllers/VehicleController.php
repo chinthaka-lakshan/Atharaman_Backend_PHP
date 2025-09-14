@@ -271,13 +271,21 @@ class VehicleController extends Controller
     // Public methods
     public function show($id)
     {
-        $vehicle = Vehicle::findOrFail($id);
+        $vehicle = Vehicle::withCount('reviews')
+                    ->withAvg('reviews', 'rating')
+                    ->with('reviews')
+                    ->findOrFail($id);
+
         return response()->json($vehicle);
     }
 
     public function index()
     {
-        $vehicles = Vehicle::with('vehicleOwner')->get();
+        $vehicles = Vehicle::withCount('reviews')
+                    ->withAvg('reviews', 'rating')
+                    ->with('reviews')
+                    ->get();
+
         return response()->json($vehicles);
     }
 
