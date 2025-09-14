@@ -4,6 +4,11 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Location;
+use App\Models\Guides;
+use App\Models\Shop;
+use App\Models\Hotel;
+use App\Models\Vehicle;
+use App\Models\Review;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 
@@ -24,6 +29,7 @@ class LocationsController extends Controller
             'latitude' => 'required|numeric',
             'longitude' => 'required|numeric',
             'locationImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'locationType' => 'required|string|max:100',
         ]);
 
         $images = [];
@@ -42,7 +48,8 @@ class LocationsController extends Controller
             'province' => $request->province,
             'latitude' => $request->latitude,
             'longitude' => $request->longitude,
-            'locationImage' => $images
+            'locationImage' => $images,
+            'locationType' => $request->locationType
         ]);
 
         return response()->json([
@@ -69,6 +76,7 @@ class LocationsController extends Controller
             'latitude' => 'sometimes|required|numeric',
             'longitude' => 'sometimes|required|numeric',
             'locationImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'locationType' => 'sometimes|required|string|max:100',
         ]);
 
         // Handle image updates
@@ -100,7 +108,7 @@ class LocationsController extends Controller
         // Update other fields
         $location->fill($request->only([
             'locationName', 'shortDescription', 'longDescription',
-            'province', 'latitude', 'longitude'
+            'province', 'latitude', 'longitude', 'locationType'
         ]));
 
         $location->save();
@@ -146,15 +154,91 @@ class LocationsController extends Controller
         ]);
     }
 
+    public function getByType($type)
+    {
+        $locations = Location::where('locationType', $type)->get();
+
+        if ($locations->isEmpty()) {
+            return response()->json(['message' => 'No locations found for this type'], 404);
+        }
+
+        return response()->json([
+            'locations' => $locations
+        ]);
+    }
+
     public function show($id)
     {
-        $location = Location::findOrFail($id);
+        $location = Location::withCount('reviews')
+                    ->withAvg('reviews', 'rating')
+                    ->with('reviews')
+                    ->findOrFail($id);
+        
         return response()->json($location);
     }
 
     public function index()
     {
-        $locations = Location::all();
+        $locations = Location::withCount('reviews')
+                    ->withAvg('reviews', 'rating')
+                    ->with('reviews')
+                    ->get();
+        
         return response()->json($locations);
+    }
+
+    // Get all related data for a specific location (guides, shops, hotels, vehicles)
+    public function getRelatedData($id)
+    {
+        try {
+            // Get the location to extract the location name
+            $location = Location::findOrFail($id);
+            $locationName = $location->locationName;
+            
+            // Fetch all related data
+            $results = [
+                'guides' => $this->getGuidesByLocation($locationName),
+                'shops' => $this->getShopsByLocation($locationName),
+                'hotels' => $this->getHotelsByLocation($locationName),
+                'vehicles' => $this->getVehiclesByLocation($locationName),
+            ];
+            
+            return response()->json([
+                'success' => true,
+                'data' => $results
+            ]);
+            
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Location not found'
+            ], 404);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch location related data: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // Helper methods
+    private function getGuidesByLocation($locationName)
+    {
+        return Guides::where('locations', 'LIKE', "%{$locationName}%")->get();
+    }
+
+    private function getShopsByLocation($locationName)
+    {
+        return Shop::whereJsonContains('locations', $locationName)->get();
+    }
+
+    private function getHotelsByLocation($locationName)
+    {
+        return Hotel::whereJsonContains('locations', $locationName)->get();
+    }
+
+    private function getVehiclesByLocation($locationName)
+    {
+        return Vehicle::whereJsonContains('locations', $locationName)->get();
     }
 }

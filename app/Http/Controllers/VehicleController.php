@@ -277,7 +277,7 @@ class VehicleController extends Controller
 
     public function index()
     {
-        $vehicles = Vehicle::all();
+        $vehicles = Vehicle::with('vehicleOwner')->get();
         return response()->json($vehicles);
     }
 

@@ -16,8 +16,24 @@ class Location extends Model
         'latitude',
         'longitude',
         'locationImage',
+        'locationType',
     ];
     protected $casts = [
         'locationImage' => 'array',
     ];
+
+    public function reviews()
+    {
+        return $this->morphMany(Review::class, 'entity');
+    }
+
+    public function getAverageRatingAttribute()
+    {
+        return $this->reviews()->avg('rating') ?: 0;
+    }
+
+    public function getReviewCountAttribute()
+    {
+        return $this->reviews()->count();
+    }
 }
