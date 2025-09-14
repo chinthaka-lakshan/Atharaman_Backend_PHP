@@ -237,13 +237,21 @@ class ShopController extends Controller
     // Public methods
     public function show($id)
     {
-        $shop = Shop::findOrFail($id);
+        $shop = Shop::withCount('reviews')
+                    ->withAvg('reviews', 'rating')
+                    ->with('reviews')
+                    ->findOrFail($id);
+
         return response()->json($shop);
     }
 
     public function index()
     {
-        $shops = Shop::all();
+        $shops = Shop::withCount('reviews')
+                    ->withAvg('reviews', 'rating')
+                    ->with('reviews')
+                    ->get();
+
         return response()->json($shops);
     }
 

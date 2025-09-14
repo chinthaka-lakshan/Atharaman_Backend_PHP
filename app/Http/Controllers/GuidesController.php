@@ -360,13 +360,21 @@ class GuidesController extends Controller
     // Public methods
     public function show($id)
     {
-        $guide = Guides::findOrFail($id);
+        $guide = Guides::withCount('reviews')
+                    ->withAvg('reviews', 'rating')
+                    ->with('reviews.user')
+                    ->findOrFail($id);
+
         return response()->json($guide);
     }
-    
+
     public function index()
     {
-        $guides = Guides::all();
+        $guides = Guides::withCount('reviews')
+                    ->withAvg('reviews', 'rating')
+                    ->with('reviews.user')
+                    ->get();
+
         return response()->json($guides);
     }
 
