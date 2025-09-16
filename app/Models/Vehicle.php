@@ -26,6 +26,7 @@ class Vehicle extends Model
         'vehicleImage' => 'array',
         'locations' => 'array',
     ];
+
     public function vehicleOwner()
     {
         return $this->belongsTo(VehicleOwner::class, 'vehicle_owner_id');
@@ -34,5 +35,20 @@ class Vehicle extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function reviews()
+    {
+        return $this->morphMany(Review::class, 'entity');
+    }
+
+    public function getAverageRatingAttribute()
+    {
+        return $this->reviews()->avg('rating') ?: 0;
+    }
+
+    public function getReviewCountAttribute()
+    {
+        return $this->reviews()->count();
     }
 }

@@ -257,13 +257,21 @@ class HotelController extends Controller
     // Public methods
     public function show($id)
     {
-        $hotel = Hotel::find($id);
+        $hotel = Hotel::withCount('reviews')
+                    ->withAvg('reviews', 'rating')
+                    ->with('reviews')
+                    ->find($id);
+
         return response()->json($hotel);
     }
 
     public function index()
     {
-        $hotels = Hotel::all();
+        $hotels = Hotel::withCount('reviews')
+                    ->withAvg('reviews', 'rating')
+                    ->with('reviews')
+                    ->get();
+
         return response()->json($hotels);
     }
 

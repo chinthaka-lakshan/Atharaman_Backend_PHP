@@ -33,4 +33,19 @@ class Hotel extends Model
     {
         return $this->belongsTo(HotelOwner::class, 'hotel_owner_id');
     }
+
+    public function reviews()
+    {
+        return $this->morphMany(Review::class, 'entity');
+    }
+
+    public function getAverageRatingAttribute()
+    {
+        return $this->reviews()->avg('rating') ?: 0;
+    }
+
+    public function getReviewCountAttribute()
+    {
+        return $this->reviews()->count();
+    }
 }
