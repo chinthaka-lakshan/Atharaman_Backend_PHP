@@ -224,21 +224,33 @@ class LocationsController extends Controller
     // Helper methods
     private function getGuidesByLocation($locationName)
     {
-        return Guides::where('locations', 'LIKE', "%{$locationName}%")->get();
+        return Guides::where('locations', 'LIKE', "%{$locationName}%")
+                    ->withCount('reviews')
+                    ->withAvg('reviews', 'rating')
+                    ->get();
     }
 
     private function getShopsByLocation($locationName)
     {
-        return Shop::whereJsonContains('locations', $locationName)->get();
+        return Shop::whereJsonContains('locations', $locationName)
+                    ->withCount('reviews')
+                    ->withAvg('reviews', 'rating')
+                    ->get();
     }
 
     private function getHotelsByLocation($locationName)
     {
-        return Hotel::whereJsonContains('locations', $locationName)->get();
+        return Hotel::whereJsonContains('locations', $locationName)
+                    ->withCount('reviews')
+                    ->withAvg('reviews', 'rating')
+                    ->get();
     }
 
     private function getVehiclesByLocation($locationName)
     {
-        return Vehicle::whereJsonContains('locations', $locationName)->get();
+        return Vehicle::whereJsonContains('locations', $locationName)
+                    ->withCount('reviews')
+                    ->withAvg('reviews', 'rating')
+                    ->get();
     }
 }
