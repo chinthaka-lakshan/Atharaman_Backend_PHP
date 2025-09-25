@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Location;
+use App\Models\LocationImage;
 use App\Models\Guides;
 use App\Models\Shop;
 use App\Models\Hotel;
@@ -11,6 +12,7 @@ use App\Models\Vehicle;
 use App\Models\Review;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class LocationsController extends Controller
 {
@@ -22,40 +24,51 @@ class LocationsController extends Controller
         }
 
         $request->validate([
-            'locationName' => 'required|string|max:255',
-            'shortDescription' => 'nullable|string|max:500',
-            'longDescription' => 'nullable|string|max:1000',
-            'province' => 'required|string|max:100',
-            'latitude' => 'required|numeric',
-            'longitude' => 'required|numeric',
-            'locationImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'locationType' => 'required|string|max:100',
+            'locationName' => ['required', 'string', 'max:500'],
+            'shortDescription' => ['required', 'string', 'max:3000'],
+            'longDescription' => ['required', 'string', 'max:10000'],
+            'province' => ['required', 'string', 'max:200'],
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
+            'locationType' => ['required', 'string', 'max:200'],
+            'locationImage' => ['nullable', 'array', 'max:10'],
+            'locationImage.*' => ['image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048']
         ]);
 
-        $images = [];
-        if ($request->hasFile('locationImage')) {
-            $images = [];
-            foreach ($request->file('locationImage') as $image) {
-                $path = $image->store('locations', 'public');
-                $images[] = $path;
+        // Start transaction for data consistency
+        DB::beginTransaction();
+
+        try {
+            // Create location
+            $location = Location::create([
+                'locationName' => $request->locationName,
+                'shortDescription' => $request->shortDescription,
+                'longDescription' => $request->longDescription,
+                'province' => $request->province,
+                'latitude' => $request->latitude,
+                'longitude' => $request->longitude,
+                'locationType' => $request->locationType
+            ]);
+
+            // Handle image uploads with location-specific folder
+            if ($request->hasFile('locationImage')) {
+                $this->processImages($location, $request->file('locationImage'));
             }
+
+            DB::commit();
+
+            // Load images for response
+            $location->load('images');
+
+            return response()->json([
+                'message' => 'Location created successfully!',
+                'location' => $location
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to create location: ' . $e->getMessage()], 500);
         }
-
-        $location = Location::create([
-            'locationName' => $request->locationName,
-            'shortDescription' => $request->shortDescription,
-            'longDescription' => $request->longDescription,
-            'province' => $request->province,
-            'latitude' => $request->latitude,
-            'longitude' => $request->longitude,
-            'locationImage' => $images,
-            'locationType' => $request->locationType
-        ]);
-
-        return response()->json([
-            'message' => 'Location created successfully!',
-            'location' => $location
-        ]);
     }
 
     public function update(Request $request, $id)
@@ -65,57 +78,81 @@ class LocationsController extends Controller
             return response()->json(['error' => 'Unauthorized. Admin access required.'], 403);
         }
 
-        $location = Location::findorFail($id);
-        $existingImages = $location->locationImage ?? [];
+        $location = Location::with('images')->findOrFail($id);
 
         $validated = $request->validate([
-            'locationName' => 'sometimes|required|string|max:255',
-            'shortDescription' => 'sometimes|nullable|string|max:500',
-            'longDescription' => 'sometimes|nullable|string|max:1000',
-            'province' => 'sometimes|required|string|max:100',
-            'latitude' => 'sometimes|required|numeric',
-            'longitude' => 'sometimes|required|numeric',
-            'locationImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'locationType' => 'sometimes|required|string|max:100',
+            'locationName' => ['sometimes', 'required', 'string', 'max:500'],
+            'shortDescription' => ['sometimes', 'required', 'string', 'max:3000'],
+            'longDescription' => ['sometimes', 'required', 'string', 'max:10000'],
+            'province' => ['sometimes', 'required', 'string', 'max:200'],
+            'latitude' => ['sometimes', 'required', 'numeric', 'between:-90,90'],
+            'longitude' => ['sometimes', 'required', 'numeric', 'between:-180,180'],
+            'locationType' => ['sometimes', 'required', 'string', 'max:200'],
+            'locationImage' => ['sometimes', 'nullable', 'array', 'max:10'],
+            'locationImage.*' => ['sometimes', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048'],
+            'removedImages' => ['sometimes', 'array'],
+            'removedImages.*' => ['sometimes', 'integer', 'exists:location_images,id']
         ]);
 
-        // Handle image updates
-        if ($request->hasFile('locationImage')) {
-            // Delete existing images from storage
-            foreach ($existingImages as $oldImage) {
-                if ($oldImage && \Storage::disk('public')->exists($oldImage)) {
-                    \Storage::disk('public')->delete($oldImage);
+        DB::beginTransaction();
+
+        try {
+            // Handle removed images FIRST
+            if ($request->has('removedImages') && !empty($request->removedImages)) {
+                $removedImages = LocationImage::where('location_id', $location->id)
+                    ->whereIn('id', $request->removedImages)
+                    ->get();
+
+                foreach ($removedImages as $image) {
+                    // Delete from storage
+                    if (Storage::disk('public')->exists($image->image_path)) {
+                        Storage::disk('public')->delete($image->image_path);
+                    }
+                    // Delete from database
+                    $image->delete();
                 }
             }
 
-            // Store new images
-            $newImages = [];
-            foreach ($request->file('locationImage') as $image) {
-                $path = $image->store('locations', 'public');
-                $newImages[] = $path;
+            // Handle new image uploads with location-specific folder
+            if ($request->hasFile('locationImage')) {
+                $this->processImages($location, $request->file('locationImage'));
             }
-            $location->locationImage = $newImages;
-        } elseif ($request->input('remove_images') === 'true') {
-            // Explicit request to remove all images
-            foreach ($existingImages as $oldImage) {
-                if ($oldImage && \Storage::disk('public')->exists($oldImage)) {
-                    \Storage::disk('public')->delete($oldImage);
-                }
-            }
-            $location->locationImage = [];
+
+            // Update location fields
+            $location->fill($request->only([
+                'locationName', 'shortDescription', 'longDescription',
+                'province', 'latitude', 'longitude', 'locationType'
+            ]));
+
+            $location->save();
+
+            // Reorder images to maintain consistent indexing
+            $this->reorderImages($location->id);
+
+            DB::commit();
+
+            // Refresh with images
+            $location->load('images');
+
+            return response()->json([
+                'message' => 'Location updated successfully!',
+                'location' => $location
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to update location: ' . $e->getMessage()], 500);
         }
+    }
 
-        // Update other fields
-        $location->fill($request->only([
-            'locationName', 'shortDescription', 'longDescription',
-            'province', 'latitude', 'longitude', 'locationType'
-        ]));
-
-        $location->save();
-
+    // Add this to your controller temporarily
+    public function checkLimits()
+    {
         return response()->json([
-            'message' => 'Location updated successfully!',
-            'location' => $location->fresh()
+            'upload_max_filesize' => ini_get('upload_max_filesize'),
+            'post_max_size' => ini_get('post_max_size'),
+            'max_file_uploads' => ini_get('max_file_uploads'),
+            'memory_limit' => ini_get('memory_limit')
         ]);
     }
 
@@ -126,19 +163,105 @@ class LocationsController extends Controller
             return response()->json(['error' => 'Unauthorized. Admin access required.'], 403);
         }
 
-        $location = Location::findOrFail($id);
+        $location = Location::with('images')->findOrFail($id);
 
-        // Delete associated images
-        $images = $location->locationImage ?? [];
-        foreach ($images as $image) {
-            if ($image && \Storage::disk('public')->exists($image)) {
-                \Storage::disk('public')->delete($image);
+        DB::beginTransaction();
+
+        try {
+            // Delete the entire location folder from storage
+            $locationFolder = "locations/{$location->id}";
+            if (Storage::disk('public')->exists($locationFolder)) {
+                Storage::disk('public')->deleteDirectory($locationFolder);
             }
+
+            // Delete associated images from database
+            $location->images()->delete();
+
+            $location->delete();
+
+            DB::commit();
+
+            return response()->json(['message' => 'Location deleted successfully!']);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to delete location: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Process and store images for a location in location-specific folder
+     */
+    private function processImages(Location $location, array $images)
+    {
+        $currentCount = $location->images()->count();
+        
+        // Validate image count (max 10)
+        if (($currentCount + count($images)) > 10) {
+            throw new \Exception('Maximum 10 images allowed. Current: ' . $currentCount);
         }
 
-        $location->delete();
+        $orderIndex = $location->images()->max('order_index') ?? -1;
 
-        return response()->json(['message' => 'Location deleted successfully!']);
+        foreach ($images as $image) {
+            $orderIndex++;
+            
+            // Store in location-specific folder: locations/{id}/filename.jpg
+            $folder = "locations/{$location->id}";
+            $filename = $this->generateUniqueFilename($image, $orderIndex);
+            $path = $image->storeAs($folder, $filename, 'public');
+            
+            LocationImage::create([
+                'location_id' => $location->id,
+                'image_path' => $path,
+                'order_index' => $orderIndex,
+                'alt_text' => "{$location->locationName} - Image " . ($orderIndex + 1)
+            ]);
+        }
+    }
+
+    /**
+     * Generate unique filename to avoid conflicts
+     */
+    private function generateUniqueFilename($image, $index)
+    {
+        $extension = $image->getClientOriginalExtension();
+        $timestamp = time();
+        return "image_{$index}_{$timestamp}.{$extension}";
+    }
+
+    /**
+     * Helper method to reorder images
+     */
+    private function reorderImages($locationId)
+    {
+        $images = LocationImage::where('location_id', $locationId)
+            ->orderBy('order_index')
+            ->get();
+
+        foreach ($images as $index => $image) {
+            $image->update(['order_index' => $index]);
+        }
+    }
+
+    public function show($id)
+    {
+        $location = Location::with(['images', 'reviews'])
+                    ->withCount('reviews')
+                    ->withAvg('reviews', 'rating')
+                    ->findOrFail($id);
+        
+        return response()->json($location);
+    }
+
+    public function index()
+    {
+        $locations = Location::with(['images'])
+                    ->withCount('reviews')
+                    ->withAvg('reviews', 'rating')
+                    ->get();
+        
+        return response()->json($locations);
     }
 
     public function getByProvince($province)
@@ -165,26 +288,6 @@ class LocationsController extends Controller
         return response()->json([
             'locations' => $locations
         ]);
-    }
-
-    public function show($id)
-    {
-        $location = Location::withCount('reviews')
-                    ->withAvg('reviews', 'rating')
-                    ->with('reviews')
-                    ->findOrFail($id);
-        
-        return response()->json($location);
-    }
-
-    public function index()
-    {
-        $locations = Location::withCount('reviews')
-                    ->withAvg('reviews', 'rating')
-                    ->with('reviews')
-                    ->get();
-        
-        return response()->json($locations);
     }
 
     // Get all related data for a specific location (guides, shops, hotels, vehicles)

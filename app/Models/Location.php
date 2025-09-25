@@ -15,12 +15,13 @@ class Location extends Model
         'province',
         'latitude',
         'longitude',
-        'locationImage',
         'locationType',
     ];
-    protected $casts = [
-        'locationImage' => 'array',
-    ];
+
+    public function images()
+    {
+        return $this->hasMany(LocationImage::class)->orderBy('order_index');
+    }
 
     public function reviews()
     {
@@ -35,5 +36,17 @@ class Location extends Model
     public function getReviewCountAttribute()
     {
         return $this->reviews()->count();
+    }
+
+    // Helper method to get first image (for thumbnails)
+    public function getFeaturedImageAttribute()
+    {
+        return $this->images->first();
+    }
+
+    // Helper method to get all image URLs
+    public function getImageUrlsAttribute()
+    {
+        return $this->images->pluck('image_url');
     }
 }
