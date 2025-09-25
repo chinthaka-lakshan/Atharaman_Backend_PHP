@@ -24,15 +24,15 @@ class LocationsController extends Controller
         }
 
         $request->validate([
-            'locationName' => 'required|string|max:500',
-            'shortDescription' => 'nullable|string|max:3000',
-            'longDescription' => 'nullable|string|max:10000',
-            'province' => 'required|string|max:100',
-            'latitude' => 'required|numeric',
-            'longitude' => 'required|numeric',
-            'locationImage' => 'nullable|array|max:10',
-            'locationImage.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:5120',
-            'locationType' => 'required|string|max:100',
+            'locationName' => ['required', 'string', 'max:500'],
+            'shortDescription' => ['required', 'string', 'max:3000'],
+            'longDescription' => ['required', 'string', 'max:10000'],
+            'province' => ['required', 'string', 'max:200'],
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
+            'locationType' => ['required', 'string', 'max:200'],
+            'locationImage' => ['nullable', 'array', 'max:10'],
+            'locationImage.*' => ['image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048']
         ]);
 
         // Start transaction for data consistency
@@ -81,17 +81,17 @@ class LocationsController extends Controller
         $location = Location::with('images')->findOrFail($id);
 
         $validated = $request->validate([
-            'locationName' => 'sometimes|required|string|max:500',
-            'shortDescription' => 'sometimes|nullable|string|max:3000',
-            'longDescription' => 'sometimes|nullable|string|max:10000',
-            'province' => 'sometimes|required|string|max:100',
-            'latitude' => 'sometimes|required|numeric',
-            'longitude' => 'sometimes|required|numeric',
-            'locationImage' => 'sometimes|array|max:10',
-            'locationImage.*' => 'image|mimes:jpeg,png,jpg,gif,webp|max:5120',
-            'locationType' => 'sometimes|required|string|max:100',
-            'removedImages' => 'sometimes|array',
-            'removedImages.*' => 'integer|exists:location_images,id'
+            'locationName' => ['sometimes', 'required', 'string', 'max:500'],
+            'shortDescription' => ['sometimes', 'required', 'string', 'max:3000'],
+            'longDescription' => ['sometimes', 'required', 'string', 'max:10000'],
+            'province' => ['sometimes', 'required', 'string', 'max:200'],
+            'latitude' => ['sometimes', 'required', 'numeric', 'between:-90,90'],
+            'longitude' => ['sometimes', 'required', 'numeric', 'between:-180,180'],
+            'locationType' => ['sometimes', 'required', 'string', 'max:200'],
+            'locationImage' => ['sometimes', 'nullable', 'array', 'max:10'],
+            'locationImage.*' => ['sometimes', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048'],
+            'removedImages' => ['sometimes', 'array'],
+            'removedImages.*' => ['sometimes', 'integer', 'exists:location_images,id']
         ]);
 
         DB::beginTransaction();
@@ -143,6 +143,17 @@ class LocationsController extends Controller
             DB::rollBack();
             return response()->json(['error' => 'Failed to update location: ' . $e->getMessage()], 500);
         }
+    }
+
+    // Add this to your controller temporarily
+    public function checkLimits()
+    {
+        return response()->json([
+            'upload_max_filesize' => ini_get('upload_max_filesize'),
+            'post_max_size' => ini_get('post_max_size'),
+            'max_file_uploads' => ini_get('max_file_uploads'),
+            'memory_limit' => ini_get('memory_limit')
+        ]);
     }
 
     public function destroy($id)
