@@ -14,20 +14,18 @@ return new class extends Migration
     public function up()
     {
         Schema::create('guides', function (Blueprint $table) {
-            $table-> id();
+            $table->id();
             $table->string('guideName');
             $table->string('guideNic');
             $table->string('businessMail');
             $table->string('personalNumber');
             $table->string('whatsappNumber');
-            $table->json('guideImage')->nullable();
             $table->json('languages')->nullable();
             $table->json('locations')->nullable();
-            $table->string('description')->nullable();
+            $table->text('description');
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->timestamps();
         });
-
     }
 
     /**
