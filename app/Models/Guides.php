@@ -15,14 +15,12 @@ class Guides extends Model
         'businessMail',
         'personalNumber',
         'whatsappNumber',
-        'guideImage',
         'languages',
         'locations',
         'description',
         'user_id',
     ];
     protected $casts = [
-        'guideImage' => 'array',
         'languages' => 'array',
         'locations' => 'array',
     ];
@@ -30,6 +28,11 @@ class Guides extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function images()
+    {
+        return $this->hasMany(GuideImage::class, 'guide_id')->orderBy('order_index');
     }
 
     public function reviews()
@@ -45,5 +48,17 @@ class Guides extends Model
     public function getReviewCountAttribute()
     {
         return $this->reviews()->count();
+    }
+
+    // Helper method to get first image (for thumbnails)
+    public function getFeaturedImageAttribute()
+    {
+        return $this->images->first();
+    }
+
+    // Helper method to get all image URLs
+    public function getImageUrlsAttribute()
+    {
+        return $this->images->pluck('image_url');
     }
 }

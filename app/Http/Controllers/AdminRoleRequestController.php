@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\RoleRequest;
-use App\Models\Guide;
+use App\Models\Guides;
 use App\Models\ShopOwner;
 use App\Models\HotelOwner;
 use App\Models\VehicleOwner;
