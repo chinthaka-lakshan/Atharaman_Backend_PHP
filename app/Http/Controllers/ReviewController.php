@@ -28,106 +28,123 @@ class ReviewController extends Controller
 
     public function store(Request $request)
     {
-        // Check if user is authenticated - only logged in users can create reviews
         if (!Auth::check()) {
             return response()->json(['message' => 'Unauthorized. Please log in to submit reviews.'], 401);
         }
 
-        // Validate the request
         $validatedData = $request->validate([
             'entity_type' => 'required|string|in:location,hotel,guide,shop,vehicle',
             'entity_id' => 'required|integer|min:1',
             'rating' => 'required|integer|min:1|max:5',
             'comment' => 'nullable|string|max:1000',
-            'images' => 'nullable|array|max:5',
-            'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
+            'review_images' => 'nullable|array|max:5',
+            'review_images.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
-
-        // Handle image uploads
-        $images = [];
-        if ($request->hasFile('images')) {
-            foreach ($request->file('images') as $image) {
-                $path = $image->store('reviews', 'public');
-                $images[] = $path;
+        DB::beginTransaction();
+        try {
+            $review = Review::create([
+                'user_id' => Auth::id(),
+                'entity_type' => $validatedData['entity_type'],
+                'entity_id' => $validatedData['entity_id'],
+                'rating' => $validatedData['rating'],
+                'comment' => $validatedData['comment'] ?? null,
+            ]);
+            // Handle image uploads
+            if ($request->hasFile('review_images')) {
+                $this->processImages($review, $request->file('review_images'));
             }
-        }
+            DB::commit();
 
-        // Create the review
-        $review = Review::create([
-            'user_id' => Auth::id(),
-            'entity_type' => $validatedData['entity_type'],
-            'entity_id' => $validatedData['entity_id'],
-            'rating' => $validatedData['rating'],
-            'comment' => $validatedData['comment'],
-            'images' => $images,
-        ]);
+            $review->load('images');
 
         return response()->json([
             'message' => 'Review created successfully!',
             'review' => $review->load('user')
         ], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Failed to create review', 'error' => $e->getMessage()], 500);
+        }
     }
+
 
     public function update(Request $request, $id)
-    {
-        // Check if user is authenticated - only logged in users can update reviews
-        if (!Auth::check()) {
-            return response()->json(['message' => 'Unauthorized. Please log in to update reviews.'], 401);
-        }
-
-        // Validate the request
-        $validatedData = $request->validate([
-            'rating' => 'sometimes|required|integer|min:1|max:5',
-            'comment' => 'nullable|string|max:1000',
-            'images' => 'nullable|array|max:5',
-            'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
-            'remove_images' => 'nullable|array',
-            'remove_images.*' => 'string',
-        ]);
-
-        $review = Review::find($id);
-        if (!$review) {
-            return response()->json(['message' => 'Review not found'], 404);
-        }
-
-        // Check if user owns the review
-        if ($review->user_id !== Auth::id()) {
-            return response()->json(['message' => 'Unauthorized. You can only edit your own reviews.'], 403);
-        }
-
-        // Get existing images
-        $existingImages = $review->images ?? [];
-
-        // Remove images if requested
-        if (!empty($validatedData['remove_images'])) {
-            foreach ($validatedData['remove_images'] as $removeImage) {
-                if (($key = array_search($removeImage, $existingImages)) !== false) {
-                    unset($existingImages[$key]);
-                    Storage::disk('public')->delete($removeImage);
-                }
-            }
-        }
-
-        // Add new images if uploaded
-        if ($request->hasFile('images')) {
-            foreach ($request->file('images') as $image) {
-                $path = $image->store('reviews', 'public');
-                $existingImages[] = $path;
-            }
-        }
-
-        // Update the review
-        $review->update([
-            'rating' => $validatedData['rating'] ?? $review->rating,
-            'comment' => $validatedData['comment'] ?? $review->comment,
-            'images' => array_values($existingImages), // Reindex array
-        ]);
-
-        return response()->json([
-            'message' => 'Review updated successfully!',
-            'review' => $review->load('user')
-        ]);
+{
+    // Check if user is authenticated
+    if (!Auth::check()) {
+        return response()->json(['message' => 'Unauthorized. Please log in to update reviews.'], 401);
     }
+
+    // Validate request
+    $validatedData = $request->validate([
+        'rating' => 'sometimes|required|integer|min:1|max:5',
+        'comment' => 'nullable|string|max:1000',
+        'images' => 'nullable|array|max:5',          // New uploaded images
+        'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
+        'remove_images' => 'nullable|array',         // Images to remove
+        'remove_images.*' => 'string',
+    ]);
+
+    $review = Review::find($id);
+    if (!$review) {
+        return response()->json(['message' => 'Review not found'], 404);
+    }
+
+    // Check ownership
+    if ($review->user_id !== Auth::id()) {
+        return response()->json(['message' => 'Unauthorized. You can only edit your own reviews.'], 403);
+    }
+
+    // Get existing images from columns
+    $existingImages = array_filter([
+        $review->image1,
+        $review->image2,
+        $review->image3,
+        $review->image4,
+        $review->image5,
+    ]);
+
+    // Remove requested images
+    if (!empty($validatedData['remove_images'])) {
+        foreach ($validatedData['remove_images'] as $removeImage) {
+            if (($key = array_search($removeImage, $existingImages)) !== false) {
+                unset($existingImages[$key]);
+                Storage::disk('public')->delete($removeImage);
+            }
+        }
+    }
+
+    // Add new uploaded images
+    if ($request->hasFile('images')) {
+        foreach ($request->file('images') as $image) {
+            $path = $image->store('reviews', 'public');
+            $existingImages[] = $path;
+        }
+    }
+
+    // Limit to max 5 images
+    $existingImages = array_slice($existingImages, 0, 5);
+    $existingImages = array_values($existingImages); // reindex
+
+    // Prepare update data mapping to image1..image5 columns
+    $updateData = [
+        'rating' => $validatedData['rating'] ?? $review->rating,
+        'comment' => $validatedData['comment'] ?? $review->comment,
+    ];
+
+    for ($i = 0; $i < 5; $i++) {
+        $updateData['image'.($i+1)] = $existingImages[$i] ?? null;
+    }
+
+    // Update the review
+    $review->update($updateData);
+
+    return response()->json([
+        'message' => 'Review updated successfully!',
+        'review' => $review->load('user')
+    ]);
+}
+
 
     public function destroy($id)
     {
