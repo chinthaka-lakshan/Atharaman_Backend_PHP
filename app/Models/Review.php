@@ -14,16 +14,7 @@ class Review extends Model
         'entity_type',
         'entity_id',
         'rating',
-        'comment',
-        'image1',
-        'image2',
-        'image3',
-        'image4',
-        'image5',
-    ];
-
-    protected $casts = [
-        'rating' => 'integer',
+        'comment'
     ];
 
     public function user()
@@ -31,31 +22,8 @@ class Review extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function entity()
+    public function images()
     {
-        return $this->morphTo();
+        return $this->hasMany(ReviewImage::class);
     }
-
-    // Return all non-null images as array
-    public function getImageList(): array
-{
-    return array_filter([
-        $this->image1,
-        $this->image2,
-        $this->image3,
-        $this->image4,
-        $this->image5,
-    ]);
-}
-
-public function hasImages()
-{
-    return count($this->getImageList()) > 0;
-}
-
-public function imageCount()
-{
-    return count($this->getImageList());
-}
-
 }
