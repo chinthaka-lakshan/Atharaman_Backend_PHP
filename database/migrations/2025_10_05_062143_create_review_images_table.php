@@ -8,31 +8,27 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
-     *
-     * @return void
      */
-    public function up()
+    public function up(): void
     {
-        Schema::create('reviews_images', function (Blueprint $table) {
+        Schema::create('review_images', function (Blueprint $table) {
             $table->id();
             $table->foreignId('review_id')->constrained()->onDelete('cascade');
             $table->string('image_path');
-            $table->integer('order_index')->default(0); // For ordering images
             $table->string('alt_text')->nullable();
+            $table->integer('order_index')->default(0);
             $table->timestamps();
-
-            // Index for better performance
+            
+            // Add index for better performance
             $table->index(['review_id', 'order_index']);
         });
     }
 
     /**
      * Reverse the migrations.
-     *
-     * @return void
      */
-    public function down()
+    public function down(): void
     {
-        Schema::dropIfExists('reviews_images');
+        Schema::dropIfExists('review_images');
     }
 };
