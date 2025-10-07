@@ -8,33 +8,41 @@ use Illuminate\Database\Eloquent\Model;
 class Vehicle extends Model
 {
     use HasFactory;
+
     protected $fillable = [
-        'vehicleName',
-        'vehicleType',
-        'vehicleNumber',
-        'pricePerDay',
-        'mileagePerDay',
-        'fuelType',
-        'withDriver',
-        'vehicleImage',
+        'vehicle_name',
+        'vehicle_type',
+        'reg_number',
+        'manufactured_year',
+        'no_of_passengers',
+        'fuel_type',
+        'driver_status',
+        'short_description',
+        'long_description',
+        'price_per_day',
+        'mileage_per_day',
         'locations',
-        'description',
         'user_id',
         'vehicle_owner_id',
     ];
+
     protected $casts = [
-        'vehicleImage' => 'array',
         'locations' => 'array',
     ];
-
-    public function vehicleOwner()
-    {
-        return $this->belongsTo(VehicleOwner::class, 'vehicle_owner_id');
-    }
 
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function images()
+    {
+        return $this->hasMany(VehicleImage::class, 'vehicle_id')->orderBy('order_index');
+    }
+
+    public function vehicleOwner()
+    {
+        return $this->belongsTo(VehicleOwner::class, 'vehicle_owner_id');
     }
 
     public function reviews()
@@ -50,5 +58,17 @@ class Vehicle extends Model
     public function getReviewCountAttribute()
     {
         return $this->reviews()->count();
+    }
+
+    // Helper method to get first image (for thumbnails)
+    public function getFeaturedImageAttribute()
+    {
+        return $this->images->first();
+    }
+
+    // Helper method to get all image URLs
+    public function getImageUrlsAttribute()
+    {
+        return $this->images->pluck('image_url');
     }
 }

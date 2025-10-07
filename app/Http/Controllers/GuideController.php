@@ -3,34 +3,43 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\Guides;
+use App\Models\Guide;
 use App\Models\GuideImage;
 use App\Models\Role;
 use App\Models\User;
-use App\Models\RoleRequest;
 use App\Models\Review;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 
-class GuidesController extends Controller
+class GuideController extends Controller
 {
     // Admin side methods
     public function store(Request $request)
     {
         $request->validate([
-            'guideName' => ['required', 'string', 'max:500'],
-            'guideNic' => ['required', 'string', 'max:255'],
-            'businessMail' => ['required', 'email'],
-            'personalNumber' => ['required', 'string', 'max:15'],
-            'whatsappNumber' => ['nullable', 'string', 'max:15'],
-            'description' => ['required', 'string', 'max:7500'],
+            'guide_name' => ['required', 'string', 'max:255'],
+            'guide_nic' => ['required', 'string', 'max:24'],
+            'guide_dob' => ['required', 'date'],
+            'guide_gender' => ['required', 'string', 'max:15'],
+            'guide_address' => ['required', 'string', 'max:500'],
+            'business_mail' => ['required', 'email'],
+            'contact_number' => ['required', 'string', 'max:15'],
+            'whatsapp_number' => ['nullable', 'string', 'max:15'],
+            'short_description' => ['required', 'string', 'max:1000'],
+            'long_description' => ['nullable', 'string', 'max:10000'],
             'languages' => ['nullable', 'array'],
             'locations' => ['nullable', 'array'],
             'user_id' => ['required', 'exists:users,id'],
             'guideImage' => ['nullable', 'array', 'max:5'],
             'guideImage.*' => ['image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048']
         ]);
+
+        // Check if NIC already exists in guides table
+        $existingGuide = Guide::where('guide_nic', $request->guide_nic)->first();
+        if ($existingGuide) {
+            return response()->json(['error' => 'This NIC is already registered as a guide in our system'], 422);
+        }
 
         // Get the guide role
         $guideRole = Role::where('name', 'guide')->first();
@@ -47,13 +56,17 @@ class GuidesController extends Controller
 
         try {
             // Create guide
-            $guide = Guides::create([
-                'guideName' => $request->guideName,
-                'guideNic' => $request->guideNic,
-                'businessMail' => $request->businessMail,
-                'personalNumber' => $request->personalNumber,
-                'whatsappNumber' => $request->whatsappNumber,
-                'description' => $request->description,
+            $guide = Guide::create([
+                'guide_name' => $request->guide_name,
+                'guide_nic' => $request->guide_nic,
+                'guide_dob' => $request->guide_dob,
+                'guide_gender' => $request->guide_gender,
+                'guide_address' => $request->guide_address,
+                'business_mail' => $request->business_mail,
+                'contact_number' => $request->contact_number,
+                'whatsapp_number' => $request->whatsapp_number,
+                'short_description' => $request->short_description,
+                'long_description' => $request->long_description,
                 'languages' => $request->languages,
                 'locations' => $request->locations,
                 'user_id' => $request->user_id
@@ -62,27 +75,6 @@ class GuidesController extends Controller
             // Attach guide role to user if not already attached
             // Use syncWithoutDetaching to avoid duplicates
             $user->roles()->syncWithoutDetaching([$guideRole->id]);
-
-            // Create or update role request status to 'accepted'
-            RoleRequest::updateOrCreate(
-                [
-                    'user_id' => $user->id,
-                    'role_id' => $guideRole->id,
-                ],
-                [
-                    'status' => 'accepted',
-                    'extra_data' => [
-                        'guideName' => $request->guideName,
-                        'guideNic' => $request->guideNic,
-                        'businessMail' => $request->businessMail,
-                        'personalNumber' => $request->personalNumber,
-                        'whatsappNumber' => $request->whatsappNumber,
-                        'languages' => $request->languages,
-                        'locations' => $request->locations,
-                        'description' => $request->description
-                    ]
-                ]
-            );
 
             // Handle image uploads with guide-specific folder
             if ($request->hasFile('guideImage')) {
@@ -107,15 +99,168 @@ class GuidesController extends Controller
 
     public function update(Request $request, $id)
     {
-        $guide = Guides::with('images')->findOrFail($id);
+        $guide = Guide::with('images')->findOrFail($id);
 
         $validated = $request->validate([
-            'guideName' => ['sometimes', 'required', 'string', 'max:500'],
-            'guideNic' => ['sometimes', 'required', 'string', 'max:255'],
-            'businessMail' => ['sometimes', 'required', 'email'],
-            'personalNumber' => ['sometimes', 'required', 'string', 'max:15'],
-            'whatsappNumber' => ['sometimes', 'nullable', 'string', 'max:15'],
-            'description' => ['sometimes', 'required', 'string', 'max:7500'],
+            'guide_name' => ['sometimes', 'required', 'string', 'max:255'],
+            'guide_nic' => ['sometimes', 'required', 'string', 'max:24'],
+            'guide_dob' => ['sometimes', 'required', 'date'],
+            'guide_gender' => ['sometimes', 'required', 'string', 'max:15'],
+            'guide_address' => ['sometimes', 'required', 'string', 'max:500'],
+            'business_mail' => ['sometimes', 'required', 'email'],
+            'contact_number' => ['sometimes', 'required', 'string', 'max:15'],
+            'whatsapp_number' => ['sometimes', 'nullable', 'string', 'max:15'],
+            'short_description' => ['sometimes', 'required', 'string', 'max:1000'],
+            'long_description' => ['sometimes', 'nullable', 'string', 'max:10000'],
+            'languages' => ['sometimes', 'nullable', 'array'],
+            'locations' => ['sometimes', 'nullable', 'array'],
+            'guideImage' => ['sometimes', 'nullable', 'array', 'max:5'],
+            'guideImage.*' => ['sometimes', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048'],
+            'removedImages' => ['sometimes', 'array'],
+            'removedImages.*' => ['sometimes', 'integer', 'exists:guide_images,id']
+        ]);
+
+        // Check if NIC already exists in guides table (excluding current guide)
+        if ($request->has('guide_nic') && $request->guide_nic !== $guide->guide_nic) {
+            $existingGuide = Guide::where('guide_nic', $request->guide_nic)
+                ->where('id', '!=', $id)
+                ->first();
+            if ($existingGuide) {
+                return response()->json(['error' => 'This NIC is already registered as a guide in our system'], 422);
+            }
+        }
+
+        DB::beginTransaction();
+
+        try {
+            // Handle removed images FIRST
+            if ($request->has('removedImages') && !empty($request->removedImages)) {
+                $removedImages = GuideImage::where('guide_id', $guide->id)
+                    ->whereIn('id', $request->removedImages)
+                    ->get();
+
+                foreach ($removedImages as $image) {
+                    // Delete from storage
+                    if (Storage::disk('public')->exists($image->image_path)) {
+                        Storage::disk('public')->delete($image->image_path);
+                    }
+                    // Delete from database
+                    $image->delete();
+                }
+            }
+
+            // Handle new image uploads with guide-specific folder
+            if ($request->hasFile('guideImage')) {
+                $this->processImages($guide, $request->file('guideImage'));
+            }
+
+            $guide->languages = $request->has('languages') ? $request->languages : null;
+            $guide->locations = $request->has('locations') ? $request->locations : null;
+
+            // Update guide fields
+            $guide->fill($request->only([
+                'guide_name', 'guide_nic', 'guide_dob', 'guide_gender',
+                'guide_address', 'business_mail', 'contact_number',
+                'whatsapp_number', 'short_description', 'long_description'
+            ]));
+
+            $guide->save();
+
+            // Reorder images to maintain consistent indexing
+            $this->reorderImages($guide->id);
+
+            DB::commit();
+
+            // Refresh with images
+            $guide->load('images');
+
+            return response()->json([
+                'message' => 'Guide updated successfully!',
+                'guide' => $guide
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to update guide: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function destroy($id)
+    {
+        $guide = Guide::with('images')->findOrFail($id);
+        $userId = $guide->user_id;
+
+        DB::beginTransaction();
+
+        try {
+            // Delete the entire guide folder from storage
+            $guideFolder = "guides/{$guide->id}";
+            if (Storage::disk('public')->exists($guideFolder)) {
+                Storage::disk('public')->deleteDirectory($guideFolder);
+            }
+
+            // Delete associated images from database
+            $guide->images()->delete();
+
+            $guideRole = Role::where('name', 'guide')->first();
+
+            if ($guideRole) {
+                // Remove the role from the user
+                DB::table('role_user')
+                    ->where('user_id', $userId)
+                    ->where('role_id', $guideRole->id)
+                    ->delete();
+                    
+                // DELETE the role requests record
+                DB::table('role_requests')
+                    ->where('user_id', $guide->user_id)
+                    ->where('role_id', $guideRole->id)
+                    ->delete();
+            }
+
+            $guide->delete();
+
+            DB::commit();
+
+            return response()->json(['message' => 'Guide deleted successfully!']);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to delete guide: ' . $e->getMessage()], 500);
+        }
+    }
+
+    // User side methods
+    public function getByAuthenticatedUser(Request $request)
+    {
+        $guide = Guide::with('images')->where('user_id', $request->user()->id)->first();
+        
+        if (!$guide) {
+            return response()->json(['error' => 'Guide not found'], 404);
+        }
+        
+        return response()->json($guide);
+    }
+
+    public function updateByAuthenticatedUser(Request $request)
+    {
+        $guide = Guide::with('images')->where('user_id', $request->user()->id)->firstOrFail();
+
+        if (!$guide) {
+            return response()->json(['error' => 'You do not have a guide profile.'], 403);
+        }
+
+        $validated = $request->validate([
+            'guide_name' => ['sometimes', 'required', 'string', 'max:255'],
+            'guide_nic' => ['sometimes', 'required', 'string', 'max:24'],
+            'guide_dob' => ['sometimes', 'required', 'date'],
+            'guide_gender' => ['sometimes', 'required', 'string', 'max:15'],
+            'guide_address' => ['sometimes', 'required', 'string', 'max:500'],
+            'business_mail' => ['sometimes', 'required', 'email'],
+            'contact_number' => ['sometimes', 'required', 'string', 'max:15'],
+            'whatsapp_number' => ['sometimes', 'nullable', 'string', 'max:15'],
+            'short_description' => ['sometimes', 'required', 'string', 'max:1000'],
+            'long_description' => ['sometimes', 'nullable', 'string', 'max:10000'],
             'languages' => ['sometimes', 'nullable', 'array'],
             'locations' => ['sometimes', 'nullable', 'array'],
             'guideImage' => ['sometimes', 'nullable', 'array', 'max:5'],
@@ -153,144 +298,10 @@ class GuidesController extends Controller
 
             // Update guide fields
             $guide->fill($request->only([
-                'guideName', 'guideNic', 'businessMail', 
-                'personalNumber', 'whatsappNumber', 'description'
+                'guide_name', 'guide_nic', 'guide_dob', 'guide_gender',
+                'guide_address', 'business_mail', 'contact_number',
+                'whatsapp_number', 'short_description', 'long_description'
             ]));
-
-            $guide->save();
-
-            // Reorder images to maintain consistent indexing
-            $this->reorderImages($guide->id);
-
-            DB::commit();
-
-            // Refresh with images
-            $guide->load('images');
-
-            return response()->json([
-                'message' => 'Guide updated successfully!',
-                'guide' => $guide
-            ]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['error' => 'Failed to update guide: ' . $e->getMessage()], 500);
-        }
-    }
-
-    public function destroy($id)
-    {
-        $guide = Guides::with('images')->findOrFail($id);
-        $userId = $guide->user_id;
-
-        DB::beginTransaction();
-
-        try {
-            // Delete the entire guide folder from storage
-            $guideFolder = "guides/{$guide->id}";
-            if (Storage::disk('public')->exists($guideFolder)) {
-                Storage::disk('public')->deleteDirectory($guideFolder);
-            }
-
-            // Delete associated images from database
-            $guide->images()->delete();
-
-            $guideRole = Role::where('name', 'guide')->first();
-                
-            if ($guideRole) {
-                // Remove the role from the user
-                DB::table('role_user')
-                    ->where('user_id', $userId)
-                    ->where('role_id', $guideRole->id)
-                    ->delete();
-                    
-                // DELETE the role requests record
-                DB::table('role_requests')
-                    ->where('user_id', $guide->user_id)
-                    ->where('role_id', $guideRole->id)
-                    ->delete();
-            }
-
-            $guide->delete();
-
-            DB::commit();
-
-            return response()->json(['message' => 'Guide deleted successfully!']);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['error' => 'Failed to delete guide: ' . $e->getMessage()], 500);
-        }
-    }
-
-    // User side methods
-    public function getByAuthenticatedUser(Request $request)
-    {
-        $guide = Guides::with('images')->where('user_id', $request->user()->id)->first();
-        
-        if (!$guide) {
-            return response()->json(['error' => 'Guide not found'], 404);
-        }
-        
-        return response()->json($guide);
-    }
-
-    public function updateByAuthenticatedUser(Request $request)
-    {
-        $guide = Guides::with('images')->where('user_id', $request->user()->id)->firstOrFail();
-
-        $validated = $request->validate([
-            'guideName' => ['sometimes', 'required', 'string', 'max:500'],
-            'guideNic' => ['sometimes', 'required', 'string', 'max:255'],
-            'businessMail' => ['sometimes', 'required', 'email'],
-            'personalNumber' => ['sometimes', 'required', 'string', 'max:15'],
-            'whatsappNumber' => ['sometimes', 'nullable', 'string', 'max:15'],
-            'description' => ['sometimes', 'required', 'string', 'max:7500'],
-            'languages' => ['sometimes', 'nullable', 'array'],
-            'locations' => ['sometimes', 'nullable', 'array'],
-            'guideImage' => ['sometimes', 'nullable', 'array', 'max:5'],
-            'guideImage.*' => ['sometimes', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048'],
-            'removedImages' => ['sometimes', 'array'],
-            'removedImages.*' => ['sometimes', 'integer', 'exists:guide_images,id']
-        ]);
-
-        DB::beginTransaction();
-
-        try {
-            // Handle removed images FIRST
-            if ($request->has('removedImages') && !empty($request->removedImages)) {
-                $removedImages = GuideImage::where('guide_id', $guide->id)
-                    ->whereIn('id', $request->removedImages)
-                    ->get();
-
-                foreach ($removedImages as $image) {
-                    // Delete from storage
-                    if (Storage::disk('public')->exists($image->image_path)) {
-                        Storage::disk('public')->delete($image->image_path);
-                    }
-                    // Delete from database
-                    $image->delete();
-                }
-            }
-
-            // Handle new image uploads with guide-specific folder
-            if ($request->hasFile('guideImage')) {
-                $this->processImages($guide, $request->file('guideImage'));
-            }
-
-            // Update guide fields
-            $guide->fill($request->only([
-                'guideName', 'guideNic', 'businessMail', 
-                'personalNumber', 'whatsappNumber', 'description'
-            ]));
-
-            if ($request->has('languages')) {
-                $guide->languages = $request->languages;
-            }
-
-            if ($request->has('locations')) {
-                $guide->locations = $request->locations;
-            }
 
             $guide->save();
 
@@ -315,7 +326,7 @@ class GuidesController extends Controller
 
     public function deleteByAuthenticatedUser(Request $request)
     {
-        $guide = Guides::with('images')->where('user_id', $request->user()->id)->firstOrFail();
+        $guide = Guide::with('images')->where('user_id', $request->user()->id)->firstOrFail();
         $userId = $guide->user_id;
 
         DB::beginTransaction();
@@ -358,10 +369,8 @@ class GuidesController extends Controller
         }
     }
 
-    /**
-     * Process and store images for a guide in guide-specific folder
-     */
-    private function processImages(Guides $guide, array $images)
+    // Process and store images for a guide in guide-specific folder
+    private function processImages(Guide $guide, array $images)
     {
         $currentCount = $guide->images()->count();
 
@@ -384,14 +393,12 @@ class GuidesController extends Controller
                 'guide_id' => $guide->id,
                 'image_path' => $path,
                 'order_index' => $orderIndex,
-                'alt_text' => "{$guide->guideName} - Image " . ($orderIndex + 1)
+                'alt_text' => "{$guide->guide_name} - Image " . ($orderIndex + 1)
             ]);
         }
     }
 
-    /**
-     * Generate unique filename to avoid conflicts
-     */
+    // Generate unique filename to avoid conflicts
     private function generateUniqueFilename($image, $index)
     {
         $extension = $image->getClientOriginalExtension();
@@ -399,9 +406,7 @@ class GuidesController extends Controller
         return "image_{$index}_{$timestamp}.{$extension}";
     }
 
-    /**
-     * Helper method to reorder images
-     */
+    // Helper method to reorder images
     private function reorderImages($guideId)
     {
         $images = GuideImage::where('guide_id', $guideId)
@@ -416,7 +421,7 @@ class GuidesController extends Controller
     // Public methods
     public function show($id)
     {
-        $guide = Guides::with(['images', 'reviews.user'])
+        $guide = Guide::with(['images', 'reviews.user'])
                     ->withCount('reviews')
                     ->withAvg('reviews', 'rating')
                     ->findOrFail($id);
@@ -426,7 +431,7 @@ class GuidesController extends Controller
 
     public function index()
     {
-        $guides = Guides::with(['images'])
+        $guides = Guide::with('images')
                     ->withCount('reviews')
                     ->withAvg('reviews', 'rating')
                     ->get();
@@ -436,9 +441,10 @@ class GuidesController extends Controller
 
     public function getByLocation($location)
     {
-        $guides = Guides::with('images')
+        $guides = Guide::with('images')
                     ->where('locations', 'LIKE', "%{$location}%")
                     ->get();
+
         return response()->json($guides);
     }
 }

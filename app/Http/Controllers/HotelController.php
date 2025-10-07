@@ -4,133 +4,182 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Hotel;
+use App\Models\HotelImage;
 use App\Models\HotelOwner;
+use App\Models\User;
+use App\Models\Review;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class HotelController extends Controller
 {
+    // Admin side methods
     public function store(Request $request)
     {
-        // Admin side methods
         $request->validate([
-            'hotelName' => 'required|string|max:255',
-            'hotelAddress' => 'required|string|max:255',
-            'businessMail' => 'required|email',
-            'contactNumber' => 'required|string|max:15',
-            'whatsappNumber' => 'nullable|string|max:15',
-            'locations' => 'nullable|array',
-            'description' => 'nullable|string',
-            'hotelImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'hotel_owner_id' => 'required|exists:hotel_owners,id',
-            'user_id' => 'required|exists:users,id'
+            'hotel_name' => ['required', 'string', 'max:255'],
+            'nearest_city' => ['required', 'string', 'max:100'],
+            'hotel_address' => ['required', 'string', 'max:500'],
+            'business_mail' => ['nullable', 'email'],
+            'contact_number' => ['required', 'string', 'max:15'],
+            'whatsapp_number' => ['nullable', 'string', 'max:15'],
+            'short_description' => ['required', 'string', 'max:1000'],
+            'long_description' => ['nullable', 'string', 'max:10000'],
+            'locations' => ['nullable', 'array'],
+            'hotel_owner_id' => ['required', 'exists:hotel_owners,id'],
+            'user_id' => ['required', 'exists:users,id'],
+            'hotelImage' => ['nullable', 'array', 'max:5'],
+            'hotelImage.*' => ['image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048']
         ]);
 
-        $images = [];
-        if ($request->hasFile('hotelImage')) {
-            $images = [];
-            foreach ($request->file('hotelImage') as $image) {
-                $path = $image->store('hotels', 'public'); 
-                $images[] = $path;
+        // Start transaction for data consistency
+        DB::beginTransaction();
+
+        try {
+            // Create hotel
+            $hotel = Hotel::create([
+                'hotel_name' => $request->hotel_name,
+                'nearest_city' => $request->nearest_city,
+                'hotel_address' => $request->hotel_address,
+                'business_mail' => $request->business_mail,
+                'contact_number' => $request->contact_number,
+                'whatsapp_number' => $request->whatsapp_number,
+                'short_description' => $request->short_description,
+                'long_description' => $request->long_description,
+                'locations' => $request->locations,
+                'hotel_owner_id' => $request->hotel_owner_id,
+                'user_id' => $request->user_id
+            ]);
+
+            // Handle image uploads with hotel-specific folder
+            if ($request->hasFile('hotelImage')) {
+                $this->processImages($hotel, $request->file('hotelImage'));
             }
+
+            DB::commit();
+
+            // Load images for response
+            $hotel->load('images');
+
+            return response()->json([
+                'message' => 'Hotel created successfully!',
+                'hotel' => $hotel
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to create hotel: ' . $e->getMessage()], 500);
         }
-
-        $hotel = Hotel::create([
-            'hotelName' => $request->hotelName,
-            'hotelAddress' => $request->hotelAddress,
-            'businessMail' => $request->businessMail,
-            'contactNumber' => $request->contactNumber,
-            'whatsappNumber' => $request->whatsappNumber,
-            'locations' => $request->locations,
-            'description' => $request->description,
-            'hotelImage' => $images,
-            'user_id' => $request->user_id,
-            'hotel_owner_id' => $request->hotel_owner_id
-        ]);
-
-        return response()->json([
-            'message' => 'Hotel created successfully!',
-            'hotel' => $hotel
-        ]);
     }
 
     public function update(Request $request, $id)
     {
-        $hotel = Hotel::findOrFail($id);
-        $existingImages = $hotel->hotelImage ?? [];
+        $hotel = Hotel::with('images')->findOrFail($id);
 
         $validated = $request->validate([
-            'hotelName' => 'sometimes|required|string|max:255',
-            'hotelAddress' => 'sometimes|required|string|max:255',
-            'businessMail' => 'sometimes|required|email',
-            'contactNumber' => 'sometimes|required|string|max:15',
-            'whatsappNumber' => 'nullable|string|max:15',
-            'locations' => 'nullable|array',
-            'description' => 'nullable|string',
-            'hotelImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'user_id' => 'sometimes|required|exists:users,id',
-            'hotel_owner_id' => 'sometimes|required|exists:hotel_owners,id'
+            'hotel_name' => ['sometimes', 'required', 'string', 'max:255'],
+            'nearest_city' => ['sometimes', 'required', 'string', 'max:100'],
+            'hotel_address' => ['sometimes', 'required', 'string', 'max:500'],
+            'business_mail' => ['sometimes', 'nullable', 'email'],
+            'contact_number' => ['sometimes', 'required', 'string', 'max:15'],
+            'whatsapp_number' => ['sometimes', 'nullable', 'string', 'max:15'],
+            'short_description' => ['sometimes', 'required', 'string', 'max:1000'],
+            'long_description' => ['sometimes', 'nullable', 'string', 'max:10000'],
+            'locations' => ['sometimes', 'nullable', 'array'],
+            'hotelImage' => ['sometimes', 'nullable', 'array', 'max:5'],
+            'hotelImage.*' => ['sometimes', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048'],
+            'removedImages' => ['sometimes', 'array'],
+            'removedImages.*' => ['sometimes', 'integer', 'exists:hotel_images,id']
         ]);
 
-        // Handle image updates
-        if ($request->hasFile('hotelImage')) {
-            // Delete existing images from storage
-            foreach ($existingImages as $oldImage) {
-                \Storage::disk('public')->delete($oldImage);
+        DB::beginTransaction();
+
+        try {
+            // Handle removed images FIRST
+            if ($request->has('removedImages') && !empty($request->removedImages)) {
+                $removedImages = HotelImage::where('hotel_id', $hotel->id)
+                    ->whereIn('id', $request->removedImages)
+                    ->get();
+
+                foreach ($removedImages as $image) {
+                    // Delete from storage
+                    if (Storage::disk('public')->exists($image->image_path)) {
+                        Storage::disk('public')->delete($image->image_path);
+                    }
+                    // Delete from database
+                    $image->delete();
+                }
             }
-            // Store new images
-            $newImages = [];
-            foreach ($request->file('hotelImage') as $image) {
-                $path = $image->store('hotels', 'public');
-                $newImages[] = $path;
+
+            // Handle new image uploads with hotel-specific folder
+            if ($request->hasFile('hotelImage')) {
+                $this->processImages($hotel, $request->file('hotelImage'));
             }
-            $hotel->hotelImage = $newImages;
-        } elseif ($request->input('remove_images') === 'true') {
-            // Explicit request to remove all images
-            foreach ($existingImages as $oldImage) {
-                \Storage::disk('public')->delete($oldImage);
-            }
-            $hotel->hotelImage = [];
+
+            $hotel->locations = $request->has('locations') ? $request->locations : null;
+        
+            // Update hotel fields
+            $hotel->fill($request->only([
+                'hotel_name', 'nearest_city', 'hotel_address',
+                'business_mail', 'contact_number', 'whatsapp_number',
+                'short_description', 'long_description'
+            ]));
+
+            $hotel->save();
+
+            // Reorder images to maintain consistent indexing
+            $this->reorderImages($hotel->id);
+
+            DB::commit();
+
+            // Refresh with images
+            $hotel->load('images');
+
+            return response()->json([
+                'message' => 'Hotel updated successfully!',
+                'hotel' => $hotel
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to update hotel: ' . $e->getMessage()], 500);
         }
-
-        // Update other fields
-        $hotel->fill($request->only([
-            'hotelName', 'hotelAddress', 'businessMail',
-            'contactNumber', 'whatsappNumber', 'description'
-        ]));
-
-        if ($request->has('locations')) {
-            $hotel->locations = $request->locations;
-        }
-
-        $hotel->save();
-
-        return response()->json([
-            'message' => 'Hotel updated successfully!',
-            'hotel' => $hotel->fresh()
-        ]);
     }
 
     public function destroy($id)
     {
-        $hotel = Hotel::findOrFail($id);
+        $hotel = Hotel::with('images')->findOrFail($id);
 
-        // Delete associated images
-        $images = $hotel->hotelImage ?? [];
-        foreach ($images as $image) {
-            \Storage::disk('public')->delete($image);
+        DB::beginTransaction();
+
+        try {
+            // Delete the entire hotel folder from storage
+            $hotelFolder = "hotels/{$hotel->id}";
+            if (Storage::disk('public')->exists($hotelFolder)) {
+                Storage::disk('public')->deleteDirectory($hotelFolder);
+            }
+
+            // Delete associated images from database
+            $hotel->images()->delete();
+            
+            $hotel->delete();
+
+            DB::commit();
+
+            return response()->json(['message' => 'Hotel deleted successfully!']);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to delete hotel: ' . $e->getMessage()], 500);
         }
-
-        $hotel->delete();
-
-        return response()->json(['message' => 'Hotel deleted successfully!']);
     }
 
     // User side methods
     public function getByAuthenticatedOwner(Request $request)
     {
         $hotelOwner = HotelOwner::where('user_id', $request->user()->id)->firstOrFail();
-        $hotels = Hotel::where('hotel_owner_id', $hotelOwner->id)->get();
+        $hotels = Hotel::with('images')->where('hotel_owner_id', $hotelOwner->id)->get();
         
         return response()->json($hotels);
     }
@@ -140,136 +189,233 @@ class HotelController extends Controller
         $hotelOwner = HotelOwner::where('user_id', $request->user()->id)->firstOrFail();
 
         $request->validate([
-            'hotelName' => 'sometimes|required|string|max:255',
-            'hotelAddress' => 'sometimes|required|string|max:255',
-            'businessMail' => 'sometimes|required|email',
-            'contactNumber' => 'sometimes|required|string|max:15',
-            'whatsappNumber' => 'nullable|string|max:15',
-            'locations' => 'nullable|array',
-            'description' => 'nullable|string',
-            'hotelImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'hotel_name' => ['required', 'string', 'max:255'],
+            'nearest_city' => ['required', 'string', 'max:100'],
+            'hotel_address' => ['required', 'string', 'max:500'],
+            'business_mail' => ['nullable', 'email'],
+            'contact_number' => ['required', 'string', 'max:15'],
+            'whatsapp_number' => ['nullable', 'string', 'max:15'],
+            'short_description' => ['required', 'string', 'max:1000'],
+            'long_description' => ['nullable', 'string', 'max:10000'],
+            'locations' => ['nullable', 'array'],
+            'hotel_owner_id' => ['required', 'exists:hotel_owners,id'],
+            'user_id' => ['required', 'exists:users,id'],
+            'hotelImage' => ['nullable', 'array', 'max:5'],
+            'hotelImage.*' => ['image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048']
         ]);
 
-        $images = [];
-        if ($request->hasFile('hotelImage')) {
-            foreach ($request->file('hotelImage') as $image) {
-                $path = $image->store('hotels', 'public'); 
-                $images[] = $path;
+        DB::beginTransaction();
+
+        try {
+            // Create hotel
+            $hotel = Hotel::create([
+                'hotel_name' => $request->hotel_name,
+                'nearest_city' => $request->nearest_city,
+                'hotel_address' => $request->hotel_address,
+                'business_mail' => $request->business_mail,
+                'contact_number' => $request->contact_number,
+                'whatsapp_number' => $request->whatsapp_number,
+                'short_description' => $request->short_description,
+                'long_description' => $request->long_description,
+                'locations' => $request->locations,
+                'hotel_owner_id' => $request->hotel_owner_id,
+                'user_id' => $request->user_id
+            ]);
+
+            // Handle image uploads with hotel-specific folder
+            if ($request->hasFile('hotelImage')) {
+                $this->processImages($hotel, $request->file('hotelImage'));
             }
+
+            DB::commit();
+
+            // Load images for response
+            $hotel->load('images');
+
+            return response()->json([
+                'message' => 'Hotel created successfully!',
+                'hotel' => $hotel
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to create hotel: ' . $e->getMessage()], 500);
         }
-
-        $hotel = Hotel::create([
-            'hotelName' => $request->hotelName,
-            'hotelAddress' => $request->hotelAddress,
-            'businessMail' => $request->businessMail,
-            'contactNumber' => $request->contactNumber,
-            'whatsappNumber' => $request->whatsappNumber,
-            'locations' => $request->locations,
-            'description' => $request->description,
-            'hotelImage' => $images,
-            'user_id' => $request->user()->id,
-            'hotel_owner_id' => $hotelOwner->id
-        ]);
-
-        return response()->json([
-            'message' => 'Hotel created successfully!',
-            'hotel' => $hotel
-        ]);
     }
 
     public function updateByAuthenticatedOwner(Request $request, $id)
     {
         $hotelOwner = HotelOwner::where('user_id', $request->user()->id)->firstOrFail();
-        $hotel = Hotel::where('id', $id)
+        $hotel = Hotel::with('images')
                     ->where('hotel_owner_id', $hotelOwner->id)
-                    ->firstOrFail();
-        
-        $existingImages = $hotel->hotelImage ?? [];
+                    ->firstOrFail($id);
 
         $validated = $request->validate([
-            'hotelName' => 'sometimes|required|string|max:255',
-            'hotelAddress' => 'sometimes|required|string|max:255',
-            'businessMail' => 'sometimes|required|email',
-            'contactNumber' => 'sometimes|required|string|max:15',
-            'whatsappNumber' => 'nullable|string|max:15',
-            'locations' => 'nullable|array',
-            'description' => 'nullable|string',
-            'hotelImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'hotel_name' => ['sometimes', 'required', 'string', 'max:255'],
+            'nearest_city' => ['sometimes', 'required', 'string', 'max:100'],
+            'hotel_address' => ['sometimes', 'required', 'string', 'max:500'],
+            'business_mail' => ['sometimes', 'nullable', 'email'],
+            'contact_number' => ['sometimes', 'required', 'string', 'max:15'],
+            'whatsapp_number' => ['sometimes', 'nullable', 'string', 'max:15'],
+            'short_description' => ['sometimes', 'required', 'string', 'max:1000'],
+            'long_description' => ['sometimes', 'nullable', 'string', 'max:10000'],
+            'locations' => ['sometimes', 'nullable', 'array'],
+            'hotelImage' => ['sometimes', 'nullable', 'array', 'max:5'],
+            'hotelImage.*' => ['sometimes', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048'],
+            'removedImages' => ['sometimes', 'array'],
+            'removedImages.*' => ['sometimes', 'integer', 'exists:hotel_images,id']
         ]);
 
-        // Handle image updates
-        if ($request->hasFile('hotelImage')) {
-            // Delete existing images from storage
-            foreach ($existingImages as $oldImage) {
-                Storage::disk('public')->delete($oldImage);
+        DB::beginTransaction();
+
+        try {
+            // Handle removed images FIRST
+            if ($request->has('removedImages') && !empty($request->removedImages)) {
+                $removedImages = HotelImage::where('hotel_id', $hotel->id)
+                    ->whereIn('id', $request->removedImages)
+                    ->get();
+
+                foreach ($removedImages as $image) {
+                    // Delete from storage
+                    if (Storage::disk('public')->exists($image->image_path)) {
+                        Storage::disk('public')->delete($image->image_path);
+                    }
+                    // Delete from database
+                    $image->delete();
+                }
             }
-            // Store new images
-            $newImages = [];
-            foreach ($request->file('hotelImage') as $image) {
-                $path = $image->store('hotels', 'public');
-                $newImages[] = $path;
+
+            // Handle new image uploads with hotel-specific folder
+            if ($request->hasFile('hotelImage')) {
+                $this->processImages($hotel, $request->file('hotelImage'));
             }
-            $hotel->hotelImage = $newImages;
-        } elseif ($request->input('remove_images') === 'true') {
-            // Explicit request to remove all images
-            foreach ($existingImages as $oldImage) {
-                Storage::disk('public')->delete($oldImage);
-            }
-            $hotel->hotelImage = [];
-        }
+
+            $hotel->locations = $request->has('locations') ? $request->locations : null;
         
-        // Update other fields
-        $hotel->fill($request->only([
-            'hotelName', 'hotelAddress', 'businessMail',
-            'contactNumber', 'whatsappNumber', 'description'
-        ]));
+            // Update hotel fields
+            $hotel->fill($request->only([
+                'hotel_name', 'nearest_city', 'hotel_address',
+                'business_mail', 'contact_number', 'whatsapp_number',
+                'short_description', 'long_description'
+            ]));
 
-        if ($request->has('locations')) {
-            $hotel->locations = $request->locations;
+            $hotel->save();
+
+            // Reorder images to maintain consistent indexing
+            $this->reorderImages($hotel->id);
+
+            DB::commit();
+
+            // Refresh with images
+            $hotel->load('images');
+
+            return response()->json([
+                'message' => 'Hotel updated successfully!',
+                'hotel' => $hotel
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to update hotel: ' . $e->getMessage()], 500);
         }
-
-        $hotel->save();
-
-        return response()->json([
-            'message' => 'Hotel updated successfully!',
-            'hotel' => $hotel->fresh()
-        ]);
     }
 
     public function deleteByAuthenticatedOwner(Request $request, $id)
     {
         $hotelOwner = HotelOwner::where('user_id', $request->user()->id)->firstOrFail();
-        $hotel = Hotel::where('id', $id)
+        $hotel = Hotel::with('images')
                     ->where('hotel_owner_id', $hotelOwner->id)
-                    ->firstOrFail();
-        
-        // Delete associated images
-        $images = $hotel->hotelImage ?? [];
-        foreach ($images as $image) {
-            \Storage::disk('public')->delete($image);
+                    ->firstOrFail($id);
+
+        DB::beginTransaction();
+
+        try {
+            // Delete the entire hotel folder from storage
+            $hotelFolder = "hotels/{$hotel->id}";
+            if (Storage::disk('public')->exists($hotelFolder)) {
+                Storage::disk('public')->deleteDirectory($hotelFolder);
+            }
+
+            // Delete associated images from database
+            $hotel->images()->delete();
+            
+            $hotel->delete();
+
+            DB::commit();
+
+            return response()->json(['message' => 'Hotel deleted successfully!']);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to delete hotel: ' . $e->getMessage()], 500);
+        }
+    }
+
+    // Process and store images for a hotel in hotel-specific folder
+    private function processImages(Hotel $hotel, array $images)
+    {
+        $currentCount = $hotel->images()->count();
+
+        // Validate image count (max 5)
+        if (($currentCount + count($images)) > 5) {
+            throw new \Exception('Maximum 5 images allowed. Current: ' . $currentCount);
         }
 
-        $hotel->delete();
+        $orderIndex = $hotel->images()->max('order_index') ?? -1;
 
-        return response()->json(['message' => 'Hotel deleted successfully!']);
+        foreach ($images as $image) {
+            $orderIndex++;
+
+            // Store in hotel-specific folder: hotel/{id}/filename.jpg
+            $folder = "hotels/{$hotel->id}";
+            $filename = $this->generateUniqueFilename($image, $orderIndex);
+            $path = $image->storeAs($folder, $filename, 'public');
+
+            HotelImage::create([
+                'hotel_id' => $hotel->id,
+                'image_path' => $path,
+                'order_index' => $orderIndex,
+                'alt_text' => "{$hotel->hotel_name} - Image " . ($orderIndex + 1)
+            ]);
+        }
+    }
+
+    // Generate unique filename to avoid conflicts
+    private function generateUniqueFilename($image, $index)
+    {
+        $extension = $image->getClientOriginalExtension();
+        $timestamp = time();
+        return "image_{$index}_{$timestamp}.{$extension}";
+    }
+
+    // Helper method to reorder images
+    private function reorderImages($hotelId)
+    {
+        $images = HotelImage::where('hotel_id', $hotelId)
+            ->orderBy('order_index')
+            ->get();
+
+        foreach ($images as $index => $image) {
+            $image->update(['order_index' => $index]);
+        }
     }
 
     // Public methods
     public function show($id)
     {
-        $hotel = Hotel::withCount('reviews')
+        $hotel = Hotel::with(['images', 'reviews'])
+                    ->withCount('reviews')
                     ->withAvg('reviews', 'rating')
-                    ->with('reviews')
-                    ->find($id);
+                    ->findOrFail($id);
 
         return response()->json($hotel);
     }
 
     public function index()
     {
-        $hotels = Hotel::withCount('reviews')
+        $hotels = Hotel::with('images')
+                    ->withCount('reviews')
                     ->withAvg('reviews', 'rating')
-                    ->with('reviews')
                     ->get();
 
         return response()->json($hotels);
@@ -277,13 +423,19 @@ class HotelController extends Controller
 
     public function getByOwner($ownerId)
     {
-        $hotels = Hotel::where('hotel_owner_id', $ownerId)->get();
+        $hotels = Hotel::with('images')
+                    ->where('hotel_owner_id', $ownerId)
+                    ->get();
+
         return response()->json($hotels);
     }
 
     public function getByLocation($location)
     {
-        $hotels = Hotel::whereJsonContains('locations', $location)->get();
+        $hotels = Hotel::with('images')
+                    ->whereJsonContains('locations', $location)
+                    ->get();
+
         return response()->json($hotels);
     }
 }

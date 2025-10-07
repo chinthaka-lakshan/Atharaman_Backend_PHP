@@ -8,23 +8,32 @@ use Illuminate\Database\Eloquent\Model;
 class Shop extends Model
 {
     use HasFactory;
-    protected $fillable=[
-        'shopName',
-        'shopAddress',
-        'description',
+
+    protected $fillable = [
+        'shop_name',
+        'nearest_city',
+        'shop_address',
+        'contact_number',
+        'whatsapp_number',
+        'short_description',
+        'long_description',
         'locations',
-        'shopImage',
         'user_id',
-        'shop_owner_id'
+        'shop_owner_id',
     ];
+
     protected $casts = [
-        'shopImage' => 'array',
         'locations' => 'array',
     ];
 
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function images()
+    {
+        return $this->hasMany(ShopImage::class, 'shop_id')->orderBy('order_index');
     }
 
     public function shopOwner()
@@ -50,5 +59,17 @@ class Shop extends Model
     public function getReviewCountAttribute()
     {
         return $this->reviews()->count();
+    }
+
+    // Helper method to get first image (for thumbnails)
+    public function getFeaturedImageAttribute()
+    {
+        return $this->images->first();
+    }
+
+    // Helper method to get all image URLs
+    public function getImageUrlsAttribute()
+    {
+        return $this->images->pluck('image_url');
     }
 }
