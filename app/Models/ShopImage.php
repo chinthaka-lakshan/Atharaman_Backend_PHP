@@ -5,12 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class GuideImage extends Model
+class ShopImage extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'guide_id',
+        'shop_id',
         'image_path',
         'order_index',
         'alt_text'
@@ -18,9 +18,9 @@ class GuideImage extends Model
 
     protected $appends = ['image_url'];
 
-    public function guide()
+    public function shop()
     {
-        return $this->belongsTo(Guide::class, 'guide_id');
+        return $this->belongsTo(Shop::class, 'shop_id');
     }
 
     // Simple accessor

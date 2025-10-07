@@ -5,21 +5,26 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Guides extends Model
+class Guide extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'guideName',
-        'guideNic',
-        'businessMail',
-        'personalNumber',
-        'whatsappNumber',
+        'guide_name',
+        'guide_nic',
+        'guide_dob',
+        'guide_gender',
+        'guide_address',
+        'business_mail',
+        'contact_number',
+        'whatsapp_number',
+        'short_description',
+        'long_description',
         'languages',
         'locations',
-        'description',
         'user_id',
     ];
+
     protected $casts = [
         'languages' => 'array',
         'locations' => 'array',

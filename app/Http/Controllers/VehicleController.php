@@ -4,9 +4,13 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Vehicle;
+use App\Models\VehicleImage;
 use App\Models\VehicleOwner;
+use App\Models\User;
+use App\Models\Review;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class VehicleController extends Controller
 {
@@ -14,130 +18,209 @@ class VehicleController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'vehicleName' => 'required|string|max:255',
-            'vehicleType' => 'required|string|max:255',
-            'vehicleNumber' => 'required|string|max:20',
-            'pricePerDay' => 'required|string|max:255',
-            'mileagePerDay' => 'required|string|max:255',
-            'fuelType' => 'required|string|max:50',
-            'withDriver' => 'required|string|max:50',
-            'vehicleImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'locations' => 'nullable|array',
-            'description' => 'nullable|string',
-            'vehicle_owner_id' => 'required|exists:vehicle_owners,id',
-            'user_id' => 'required|exists:users,id'
+            'vehicle_name' => ['required', 'string', 'max:255'],
+            'vehicle_type' => ['required', 'string', 'max:50'],
+            'reg_number' => ['required', 'string', 'max:24', 'regex:/^[A-Z0-9]{2,3}([\-\s]?[0-9]{3,4})?$/'],
+            'manufactured_year' => ['nullable', 'digits:4', 'integer', 'min:1900', 'max:'.(date('Y')+1)],
+            'no_of_passengers' => ['required', 'integer', 'min:1', 'max:100'],
+            'fuel_type' => ['required', 'string', 'max:24'],
+            'driver_status' => ['required', 'string', 'max:50'],
+            'short_description' => ['required', 'string', 'max:1000'],
+            'long_description' => ['nullable', 'string', 'max:10000'],
+            'price_per_day' => ['nullable', 'numeric', 'min:0'],
+            'mileage_per_day' => ['nullable', 'integer', 'min:0'],
+            'locations' => ['nullable', 'array'],
+            'vehicle_owner_id' => ['required', 'exists:vehicle_owners,id'],
+            'user_id' => ['required', 'exists:users,id'],
+            'vehicleImage' => ['nullable', 'array', 'max:5'],
+            'vehicleImage.*' => ['image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048']
         ]);
 
-        $images = [];
-        if ($request->hasFile('vehicleImage')) {
-            $images = [];
-            foreach ($request->file('vehicleImage') as $image) {
-                $path = $image->store('vehicles', 'public');
-                $images[] = $path;
-            }
+        // Normalize and validate registration number
+        $normalizedRegNumber = $this->normalizeRegistrationNumber($request->reg_number);
+        
+        // Check if normalized registration number already exists
+        $existingVehicle = Vehicle::where('reg_number', $normalizedRegNumber)->first();
+        if ($existingVehicle) {
+            return response()->json(['error' => 'This registration number is already registered in our system'], 422);
         }
 
-        $vehicle = Vehicle::create([
-            'vehicleName' => $request->vehicleName,
-            'vehicleType' => $request->vehicleType,
-            'vehicleNumber' => $request->vehicleNumber,
-            'pricePerDay' => $request->pricePerDay,
-            'mileagePerDay' => $request->mileagePerDay,
-            'fuelType' => $request->fuelType,
-            'withDriver' => $request->withDriver,
-            'vehicleImage' => $images,
-            'locations' => $request->locations,
-            'description' => $request->description,
-            'user_id' => $request->user_id,
-            'vehicle_owner_id' => $request->vehicle_owner_id
-        ]);
+        // Start transaction for data consistency
+        DB::beginTransaction();
 
-        return response()->json([
-            'message' => 'Vehicle created successfully!',
-            'vehicle' => $vehicle
-        ]); 
+        try {
+            // Create vehicle
+            $vehicle = Vehicle::create([
+                'vehicle_name' => $request->vehicle_name,
+                'vehicle_type' => $request->vehicle_type,
+                'reg_number' => $normalizedRegNumber,
+                'manufactured_year' => $request->manufactured_year,
+                'no_of_passengers' => $request->no_of_passengers,
+                'fuel_type' => $request->fuel_type,
+                'driver_status' => $request->driver_status,
+                'short_description' => $request->short_description,
+                'long_description' => $request->long_description,
+                'price_per_day' => $request->filled('price_per_day') ? $request->price_per_day : null,
+                'mileage_per_day' => $request->filled('mileage_per_day') ? $request->mileage_per_day : null,
+                'locations' => $request->locations,
+                'vehicle_owner_id' => $request->vehicle_owner_id,
+                'user_id' => $request->user_id
+            ]);
+
+            // Handle image uploads with vehicle-specific folder
+            if ($request->hasFile('vehicleImage')) {
+                $this->processImages($vehicle, $request->file('vehicleImage'));
+            }
+
+            DB::commit();
+
+            // Load images for response
+            $vehicle->load('images');
+
+            return response()->json([
+                'message' => 'Vehicle created successfully!',
+                'vehicle' => $vehicle
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to create vehicle: ' . $e->getMessage()], 500);
+        }
     }
 
     public function update(Request $request, $id)
     {
-        $vehicle = Vehicle::findOrFail($id);
-        $existingImages = $vehicle->vehicleImage ?? [];
+        $vehicle = Vehicle::with('images')->findOrFail($id);
 
         $validated = $request->validate([
-            'vehicleName' => 'sometimes|required|string|max:255',
-            'vehicleType' => 'sometimes|required|string|max:255',
-            'vehicleNumber' => 'sometimes|required|string|max:20',
-            'pricePerDay' => 'sometimes|required|numeric',
-            'mileagePerDay' => 'sometimes|required|numeric',
-            'fuelType' => 'sometimes|required|string|max:50',
-            'withDriver' => 'sometimes|required|string|max:50',
-            'vehicleImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'locations' => 'nullable|array',
-            'description' => 'nullable|string',
-            'user_id' => 'sometimes|required|exists:users,id',
-            'vehicle_owner_id' => 'sometimes|required|exists:vehicle_owners,id'
+            'vehicle_name' => ['sometimes', 'required', 'string', 'max:255'],
+            'vehicle_type' => ['sometimes', 'required', 'string', 'max:50'],
+            'reg_number' => ['sometimes', 'required', 'string', 'max:24', 'regex:/^[A-Z0-9]{2,3}([\-\s]?[0-9]{3,4})?$/'],
+            'manufactured_year' => ['sometimes', 'nullable', 'digits:4', 'integer', 'min:1900', 'max:'.(date('Y')+1)],
+            'no_of_passengers' => ['sometimes', 'required', 'integer', 'min:1', 'max:100'],
+            'fuel_type' => ['sometimes', 'required', 'string', 'max:24'],
+            'driver_status' => ['sometimes', 'required', 'string', 'max:50'],
+            'short_description' => ['sometimes', 'required', 'string', 'max:1000'],
+            'long_description' => ['sometimes', 'nullable', 'string', 'max:10000'],
+            'price_per_day' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'mileage_per_day' => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'locations' => ['sometimes', 'nullable', 'array'],
+            'vehicleImage' => ['sometimes', 'nullable', 'array', 'max:5'],
+            'vehicleImage.*' => ['sometimes', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048'],
+            'removedImages' => ['sometimes', 'array'],
+            'removedImages.*' => ['sometimes', 'integer', 'exists:vehicle_images,id']
         ]);
 
-        // Handle image updates
-        if ($request->hasFile('vehicleImage')) {
-            // Delete existing images from storage
-            foreach ($existingImages as $oldImage) {
-                \Storage::disk('public')->delete($oldImage);
+        DB::beginTransaction();
+
+        try {
+            // Handle removed images FIRST
+            if ($request->has('removedImages') && !empty($request->removedImages)) {
+                $removedImages = VehicleImage::where('vehicle_id', $vehicle->id)
+                    ->whereIn('id', $request->removedImages)
+                    ->get();
+
+                foreach ($removedImages as $image) {
+                    // Delete from storage
+                    if (Storage::disk('public')->exists($image->image_path)) {
+                        Storage::disk('public')->delete($image->image_path);
+                    }
+                    // Delete from database
+                    $image->delete();
+                }
             }
-            // Store new images
-            $newImages = [];
-            foreach ($request->file('vehicleImage') as $image) {
-                $path = $image->store('vehicles', 'public');
-                $newImages[] = $path;
+
+            // Handle new image uploads with vehicle-specific folder
+            if ($request->hasFile('vehicleImage')) {
+                $this->processImages($vehicle, $request->file('vehicleImage'));
             }
-            $vehicle->vehicleImage = $newImages;
-        } elseif ($request->input('remove_images') === 'true') {
-            // Explicit request to remove all images
-            foreach ($existingImages as $oldImage) {
-                \Storage::disk('public')->delete($oldImage);
+
+            // Normalize and validate registration number if it's being updated
+            if ($request->has('reg_number')) {
+                $normalizedRegNumber = $this->normalizeRegistrationNumber($request->reg_number);
+                
+                // Check if normalized reg_number already exists (excluding current vehicle)
+                if ($normalizedRegNumber !== $vehicle->reg_number) {
+                    $existingVehicle = Vehicle::where('reg_number', $normalizedRegNumber)
+                        ->where('id', '!=', $id)
+                        ->first();
+                        
+                    if ($existingVehicle) {
+                        return response()->json(['error' => 'This registration number is already registered in our system'], 422);
+                    }
+                    
+                    $vehicle->reg_number = $normalizedRegNumber;
+                }
             }
-            $vehicle->vehicleImage = [];
+
+            $vehicle->locations = $request->has('locations') ? $request->locations : null;
+        
+            // Update vehicle fields
+            $updateData = $request->only([
+                'vehicle_name', 'vehicle_type', 'manufactured_year',
+                'no_of_passengers', 'fuel_type', 'driver_status',
+                'short_description', 'long_description'
+            ]);
+
+            // Handle nullable numeric fields specifically
+            $updateData['price_per_day'] = $request->filled('price_per_day') ? $request->price_per_day : null;
+            $updateData['mileage_per_day'] = $request->filled('mileage_per_day') ? $request->mileage_per_day : null;
+
+            $vehicle->fill($updateData);
+            $vehicle->save();
+
+            // Reorder images to maintain consistent indexing
+            $this->reorderImages($vehicle->id);
+
+            DB::commit();
+
+            // Refresh with images
+            $vehicle->load('images');
+
+            return response()->json([
+                'message' => 'Vehicle updated successfully!',
+                'vehicle' => $vehicle
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to update vehicle: ' . $e->getMessage()], 500);
         }
-
-        // Update other fields
-        $vehicle->fill($request->only([
-            'vehicleName', 'vehicleType', 'vehicleNumber',
-            'pricePerDay', 'mileagePerDay', 'fuelType',
-            'withDriver', 'description'
-        ]));
-
-        if ($request->has('locations')) {
-            $vehicle->locations = $request->locations;
-        }
-
-        $vehicle->save();
-
-        return response()->json([
-            'message' => 'Vehicle updated successfully!',
-            'vehicle' => $vehicle->fresh()
-        ]);
     }
 
     public function destroy($id)
     {
-        $vehicle = Vehicle::findOrFail($id);
+        $vehicle = Vehicle::with('images')->findOrFail($id);
 
-        // Delete associated images
-        $images = $vehicle->vehicleImage ?? [];
-        foreach ($images as $image) {
-            \Storage::disk('public')->delete($image);
+        DB::beginTransaction();
+
+        try {
+            // Delete the entire vehicle folder from storage
+            $vehicleFolder = "vehicles/{$vehicle->id}";
+            if (Storage::disk('public')->exists($vehicleFolder)) {
+                Storage::disk('public')->deleteDirectory($vehicleFolder);
+            }
+
+            // Delete associated images from database
+            $vehicle->images()->delete();
+            
+            $vehicle->delete();
+
+            DB::commit();
+
+            return response()->json(['message' => 'Vehicle deleted successfully!']);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to delete vehicle: ' . $e->getMessage()], 500);
         }
-
-        $vehicle->delete();
-
-        return response()->json(['message' => 'Vehicle deleted successfully!']);
     }
 
     // User side methods
     public function getByAuthenticatedOwner(Request $request)
     {
         $vehicleOwner = VehicleOwner::where('user_id', $request->user()->id)->firstOrFail();
-        $vehicles = Vehicle::where('vehicle_owner_id', $vehicleOwner->id)->get();
+        $vehicles = Vehicle::with('images')->where('vehicle_owner_id', $vehicleOwner->id)->get();
         
         return response()->json($vehicles);
     }
@@ -147,133 +230,312 @@ class VehicleController extends Controller
         $vehicleOwner = VehicleOwner::where('user_id', $request->user()->id)->firstOrFail();
 
         $request->validate([
-            'vehicleName' => 'sometimes|required|string|max:255',
-            'vehicleType' => 'sometimes|required|string|max:255',
-            'vehicleNumber' => 'sometimes|required|string|max:20',
-            'pricePerDay' => 'sometimes|required|numeric',
-            'mileagePerDay' => 'sometimes|required|numeric',
-            'fuelType' => 'sometimes|required|string|max:50',
-            'withDriver' => 'sometimes|required|string|max:50',
-            'vehicleImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'locations' => 'nullable|array',
-            'description' => 'nullable|string',
+            'vehicle_name' => ['required', 'string', 'max:255'],
+            'vehicle_type' => ['required', 'string', 'max:50'],
+            'reg_number' => ['required', 'string', 'max:24', 'regex:/^[A-Z0-9]{2,3}([\-\s]?[0-9]{3,4})?$/'],
+            'manufactured_year' => ['nullable', 'digits:4', 'integer', 'min:1900', 'max:'.(date('Y')+1)],
+            'no_of_passengers' => ['required', 'integer', 'min:1', 'max:100'],
+            'fuel_type' => ['required', 'string', 'max:24'],
+            'driver_status' => ['required', 'string', 'max:50'],
+            'short_description' => ['required', 'string', 'max:1000'],
+            'long_description' => ['nullable', 'string', 'max:10000'],
+            'price_per_day' => ['nullable', 'numeric', 'min:0'],
+            'mileage_per_day' => ['nullable', 'integer', 'min:0'],
+            'locations' => ['nullable', 'array'],
+            'vehicle_owner_id' => ['required', 'exists:vehicle_owners,id'],
+            'user_id' => ['required', 'exists:users,id'],
+            'vehicleImage' => ['nullable', 'array', 'max:5'],
+            'vehicleImage.*' => ['image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048']
         ]);
 
-        $images = [];
-        if ($request->hasFile('vehicleImage')) {
-            foreach ($request->file('vehicleImage') as $image) {
-                $path = $image->store('vehicles', 'public'); 
-                $images[] = $path;
-            }
+        // Normalize and validate registration number
+        $normalizedRegNumber = $this->normalizeRegistrationNumber($request->reg_number);
+        
+        // Check if normalized registration number already exists
+        $existingVehicle = Vehicle::where('reg_number', $normalizedRegNumber)->first();
+        if ($existingVehicle) {
+            return response()->json(['error' => 'This registration number is already registered in our system'], 422);
         }
 
-        $vehicle = Vehicle::create([
-            'vehicleName' => $request->vehicleName,
-            'vehicleType' => $request->vehicleType,
-            'vehicleNumber' => $request->vehicleNumber,
-            'pricePerDay' => $request->pricePerDay,
-            'mileagePerDay' => $request->mileagePerDay,
-            'fuelType' => $request->fuelType,
-            'withDriver' => $request->withDriver,
-            'vehicleImage' => $images,
-            'locations' => $request->locations,
-            'description' => $request->description,
-            'user_id' => $request->user()->id,
-            'vehicle_owner_id' => $vehicleOwner->id
-        ]);
+        DB::beginTransaction();
 
-        return response()->json([
-            'message' => 'Vehicle created successfully!',
-            'vehicle' => $vehicle
-        ]);
+        try {
+            // Create vehicle
+            $vehicle = Vehicle::create([
+                'vehicle_name' => $request->vehicle_name,
+                'vehicle_type' => $request->vehicle_type,
+                'reg_number' => $normalizedRegNumber,
+                'manufactured_year' => $request->manufactured_year,
+                'no_of_passengers' => $request->no_of_passengers,
+                'fuel_type' => $request->fuel_type,
+                'driver_status' => $request->driver_status,
+                'short_description' => $request->short_description,
+                'long_description' => $request->long_description,
+                'price_per_day' => $request->filled('price_per_day') ? $request->price_per_day : null,
+                'mileage_per_day' => $request->filled('mileage_per_day') ? $request->mileage_per_day : null,
+                'locations' => $request->locations,
+                'vehicle_owner_id' => $request->vehicle_owner_id,
+                'user_id' => $request->user_id
+            ]);
+
+            // Handle image uploads with vehicle-specific folder
+            if ($request->hasFile('vehicleImage')) {
+                $this->processImages($vehicle, $request->file('vehicleImage'));
+            }
+
+            DB::commit();
+
+            // Load images for response
+            $vehicle->load('images');
+
+            return response()->json([
+                'message' => 'Vehicle created successfully!',
+                'vehicle' => $vehicle
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to create vehicle: ' . $e->getMessage()], 500);
+        }
     }
 
     public function updateByAuthenticatedOwner(Request $request, $id)
     {
         $vehicleOwner = VehicleOwner::where('user_id', $request->user()->id)->firstOrFail();
-        $vehicle = Vehicle::where('id', $id)
+        $vehicle = Vehicle::with('images')
                     ->where('vehicle_owner_id', $vehicleOwner->id)
-                    ->firstOrFail();
-        
-        $existingImages = $vehicle->vehicleImage ?? [];
+                    ->firstOrFail($id);
 
         $validated = $request->validate([
-            'vehicleName' => 'sometimes|required|string|max:255',
-            'vehicleType' => 'sometimes|required|string|max:255',
-            'vehicleNumber' => 'sometimes|required|string|max:20',
-            'pricePerDay' => 'sometimes|required|numeric',
-            'mileagePerDay' => 'sometimes|required|numeric',
-            'fuelType' => 'sometimes|required|string|max:50',
-            'withDriver' => 'sometimes|required|string|max:50',
-            'vehicleImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'locations' => 'nullable|array',
-            'description' => 'nullable|string',
+            'vehicle_name' => ['sometimes', 'required', 'string', 'max:255'],
+            'vehicle_type' => ['sometimes', 'required', 'string', 'max:50'],
+            'reg_number' => ['sometimes', 'required', 'string', 'max:24', 'regex:/^[A-Z0-9]{2,3}([\-\s]?[0-9]{3,4})?$/'],
+            'manufactured_year' => ['sometimes', 'nullable', 'digits:4', 'integer', 'min:1900', 'max:'.(date('Y')+1)],
+            'no_of_passengers' => ['sometimes', 'required', 'integer', 'min:1', 'max:100'],
+            'fuel_type' => ['sometimes', 'required', 'string', 'max:24'],
+            'driver_status' => ['sometimes', 'required', 'string', 'max:50'],
+            'short_description' => ['sometimes', 'required', 'string', 'max:1000'],
+            'long_description' => ['sometimes', 'nullable', 'string', 'max:10000'],
+            'price_per_day' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'mileage_per_day' => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'locations' => ['sometimes', 'nullable', 'array'],
+            'vehicleImage' => ['sometimes', 'nullable', 'array', 'max:5'],
+            'vehicleImage.*' => ['sometimes', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048'],
+            'removedImages' => ['sometimes', 'array'],
+            'removedImages.*' => ['sometimes', 'integer', 'exists:vehicle_images,id']
         ]);
 
-        // Handle image updates
-        if ($request->hasFile('vehicleImage')) {
-            // Delete existing images from storage
-            foreach ($existingImages as $oldImage) {
-                Storage::disk('public')->delete($oldImage);
+        DB::beginTransaction();
+
+        try {
+            // Handle removed images FIRST
+            if ($request->has('removedImages') && !empty($request->removedImages)) {
+                $removedImages = VehicleImage::where('vehicle_id', $vehicle->id)
+                    ->whereIn('id', $request->removedImages)
+                    ->get();
+
+                foreach ($removedImages as $image) {
+                    // Delete from storage
+                    if (Storage::disk('public')->exists($image->image_path)) {
+                        Storage::disk('public')->delete($image->image_path);
+                    }
+                    // Delete from database
+                    $image->delete();
+                }
             }
-            // Store new images
-            $newImages = [];
-            foreach ($request->file('vehicleImage') as $image) {
-                $path = $image->store('vehicles', 'public');
-                $newImages[] = $path;
+
+            // Handle new image uploads with vehicle-specific folder
+            if ($request->hasFile('vehicleImage')) {
+                $this->processImages($vehicle, $request->file('vehicleImage'));
             }
-            $vehicle->vehicleImage = $newImages;
-        } elseif ($request->input('remove_images') === 'true') {
-            // Explicit request to remove all images
-            foreach ($existingImages as $oldImage) {
-                Storage::disk('public')->delete($oldImage);
+
+            $vehicle->locations = $request->has('locations') ? $request->locations : null;
+
+            // Normalize and validate registration number if it's being updated
+            if ($request->has('reg_number')) {
+                $normalizedRegNumber = $this->normalizeRegistrationNumber($request->reg_number);
+                
+                // Check if normalized reg_number already exists (excluding current vehicle)
+                if ($normalizedRegNumber !== $vehicle->reg_number) {
+                    $existingVehicle = Vehicle::where('reg_number', $normalizedRegNumber)
+                        ->where('id', '!=', $id)
+                        ->first();
+                        
+                    if ($existingVehicle) {
+                        return response()->json(['error' => 'This registration number is already registered in our system'], 422);
+                    }
+                    
+                    $vehicle->reg_number = $normalizedRegNumber;
+                }
             }
-            $vehicle->vehicleImage = [];
-        }
         
-        // Update other fields
-        $vehicle->fill($request->only([
-            'vehicleName', 'vehicleType', 'vehicleNumber',
-            'pricePerDay', 'mileagePerDay', 'fuelType',
-            'withDriver', 'description'
-        ]));
+            // Update vehicle fields
+            $updateData = $request->only([
+                'vehicle_name', 'vehicle_type', 'manufactured_year',
+                'no_of_passengers', 'fuel_type', 'driver_status',
+                'short_description', 'long_description'
+            ]);
 
-        if ($request->has('locations')) {
-            $vehicle->locations = $request->locations;
+            // Handle nullable numeric fields specifically
+            $updateData['price_per_day'] = $request->filled('price_per_day') ? $request->price_per_day : null;
+            $updateData['mileage_per_day'] = $request->filled('mileage_per_day') ? $request->mileage_per_day : null;
+
+            $vehicle->fill($updateData);
+            $vehicle->save();
+
+            // Reorder images to maintain consistent indexing
+            $this->reorderImages($vehicle->id);
+
+            DB::commit();
+
+            // Refresh with images
+            $vehicle->load('images');
+
+            return response()->json([
+                'message' => 'Vehicle updated successfully!',
+                'vehicle' => $vehicle
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to update vehicle: ' . $e->getMessage()], 500);
         }
-
-        $vehicle->save();
-
-        return response()->json([
-            'message' => 'Vehicle updated successfully!',
-            'vehicle' => $vehicle->fresh()
-        ]);
     }
 
     public function deleteByAuthenticatedOwner(Request $request, $id)
     {
         $vehicleOwner = VehicleOwner::where('user_id', $request->user()->id)->firstOrFail();
-        $vehicle = Vehicle::where('id', $id)
+        $vehicle = Vehicle::with('images')
                     ->where('vehicle_owner_id', $vehicleOwner->id)
-                    ->firstOrFail();
-        
-        // Delete associated images
-        $images = $vehicle->vehicleImage ?? [];
-        foreach ($images as $image) {
-            \Storage::disk('public')->delete($image);
+                    ->findOrFail($id);
+
+        DB::beginTransaction();
+
+        try {
+            // Delete the entire vehicle folder from storage
+            $vehicleFolder = "vehicles/{$vehicle->id}";
+            if (Storage::disk('public')->exists($vehicleFolder)) {
+                Storage::disk('public')->deleteDirectory($vehicleFolder);
+            }
+
+            // Delete associated images from database
+            $vehicle->images()->delete();
+            
+            $vehicle->delete();
+
+            DB::commit();
+
+            return response()->json(['message' => 'Vehicle deleted successfully!']);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to delete vehicle: ' . $e->getMessage()], 500);
+        }
+    }
+
+    // Process and store images for a vehicle in vehicle-specific folder
+    private function processImages(Vehicle $vehicle, array $images)
+    {
+        $currentCount = $vehicle->images()->count();
+
+        // Validate image count (max 5)
+        if (($currentCount + count($images)) > 5) {
+            throw new \Exception('Maximum 5 images allowed. Current: ' . $currentCount);
         }
 
-        $vehicle->delete();
+        $orderIndex = $vehicle->images()->max('order_index') ?? -1;
 
-        return response()->json(['message' => 'Vehicle deleted successfully!']);
+        foreach ($images as $image) {
+            $orderIndex++;
+
+            // Store in vehicle-specific folder: vehicle/{id}/filename.jpg
+            $folder = "vehicles/{$vehicle->id}";
+            $filename = $this->generateUniqueFilename($image, $orderIndex);
+            $path = $image->storeAs($folder, $filename, 'public');
+
+            VehicleImage::create([
+                'vehicle_id' => $vehicle->id,
+                'image_path' => $path,
+                'order_index' => $orderIndex,
+                'alt_text' => "{$vehicle->vehicle_name} - Image " . ($orderIndex + 1)
+            ]);
+        }
+    }
+
+    // Generate unique filename to avoid conflicts
+    private function generateUniqueFilename($image, $index)
+    {
+        $extension = $image->getClientOriginalExtension();
+        $timestamp = time();
+        return "image_{$index}_{$timestamp}.{$extension}";
+    }
+
+    // Helper method to reorder images
+    private function reorderImages($vehicleId)
+    {
+        $images = VehicleImage::where('vehicle_id', $vehicleId)
+            ->orderBy('order_index')
+            ->get();
+
+        foreach ($images as $index => $image) {
+            $image->update(['order_index' => $index]);
+        }
+    }
+
+    // Normalize registration number by removing extra spaces and converting to uppercase
+    private function normalizeRegistrationNumber($regNumber)
+    {
+        // Remove all spaces and convert to uppercase
+        return strtoupper(preg_replace('/\s+/', '', $regNumber));
+    }
+
+    // Check registration number availability (for real-time validation)
+    public function checkRegistrationNumber(Request $request)
+    {
+        $request->validate([
+            'reg_number' => 'required|string|max:24',
+            'exclude_id' => 'nullable|integer|exists:vehicles,id'
+        ]);
+
+        $normalizedRegNumber = $this->normalizeRegistrationNumber($request->reg_number);
+        
+        // Validate format against the regex
+        $isValidFormat = preg_match('/^[A-Z0-9]{2,3}([\-\s]?[0-9]{3,4})?$/', $normalizedRegNumber);
+        
+        if (!$isValidFormat) {
+            return response()->json([
+                'available' => false,
+                'message' => 'Invalid registration number format. Expected format: ABC123, AB-1234, BC 1234'
+            ], 422);
+        }
+
+        $query = Vehicle::where('reg_number', $normalizedRegNumber);
+        
+        if ($request->has('exclude_id')) {
+            $query->where('id', '!=', $request->exclude_id);
+        }
+
+        $exists = $query->exists();
+
+        if ($exists) {
+            return response()->json([
+                'available' => false,
+                'message' => 'This registration number is already registered in our system'
+            ], 422);
+        }
+
+        return response()->json([
+            'available' => true,
+            'message' => 'Registration number is available'
+        ]);
     }
 
     // Public methods
     public function show($id)
     {
-        $vehicle = Vehicle::withCount('reviews')
+        $vehicle = Vehicle::with(['images', 'reviews'])
+                    ->withCount('reviews')
                     ->withAvg('reviews', 'rating')
-                    ->with('reviews')
                     ->findOrFail($id);
 
         return response()->json($vehicle);
@@ -281,9 +543,9 @@ class VehicleController extends Controller
 
     public function index()
     {
-        $vehicles = Vehicle::withCount('reviews')
+        $vehicles = Vehicle::with('images')
+                    ->withCount('reviews')
                     ->withAvg('reviews', 'rating')
-                    ->with('reviews')
                     ->get();
 
         return response()->json($vehicles);
@@ -291,13 +553,19 @@ class VehicleController extends Controller
 
     public function getByOwner($ownerId)
     {
-        $vehicles = Vehicle::where('vehicle_owner_id', $ownerId)->get();
+        $vehicles = Vehicle::with('images')
+                        ->where('vehicle_owner_id', $ownerId)
+                        ->get();
+
         return response()->json($vehicles);
     }
 
     public function getByLocation($location)
     {
-        $vehicles = Vehicle::whereJsonContains('locations', $location)->get();
+        $vehicles = Vehicle::with('images')
+                        ->whereJsonContains('locations', $location)
+                        ->get();
+
         return response()->json($vehicles);
     }
 }

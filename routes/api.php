@@ -4,7 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 use App\Models\User;
-use App\Models\Guides;
+use App\Models\Guide;
 use App\Models\ShopOwner;
 use App\Models\HotelOwner;
 use App\Models\VehicleOwner;
@@ -18,7 +18,7 @@ use App\Models\WebsiteReview;
 use App\Models\TouristSpot;
 use App\Http\Controllers\ChatbotController;
 use App\Http\Controllers\Controller;
-use App\Http\Controllers\GuidesController;
+use App\Http\Controllers\GuideController;
 use App\Http\Controllers\ShopOwnerController;
 use App\Http\Controllers\HotelOwnerController;
 use App\Http\Controllers\VehicleOwnerController;
@@ -33,24 +33,21 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\RoleRequestController;
 use App\Http\Controllers\AdminRoleRequestController;
 
-// Public (no auth required) routes
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
 Route::post('/chatbot', [ChatbotController::class, 'ask']);
 // Password reset routes
 Route::post('/forgot-password', [AuthController::class, 'sendResetLink']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
-// Other public APIs
+// Public routes
+Route::post('/register', [AuthController::class, 'register']);
+Route::post('/login', [AuthController::class, 'login']);
 Route::get('/locations', [LocationsController::class, 'index']);
 Route::get('/locations/{id}', [LocationsController::class, 'show']);
 Route::get('/locations/province/{province}', [LocationsController::class, 'getByProvince']);
 Route::get('/locations/{id}/related-data', [LocationsController::class, 'getRelatedData']);
-
-Route::get('/guides', [GuidesController::class, 'index']);
-Route::get('/guides/{id}', [GuidesController::class, 'show']);
-Route::get('/guides/location/{location}', [GuidesController::class, 'getByLocation']);
-
+Route::get('/guides', [GuideController::class, 'index']);
+Route::get('/guides/{id}', [GuideController::class, 'show']);
+Route::get('/guides/location/{location}', [GuideController::class, 'getByLocation']);
 Route::get('/shop-owners', [ShopOwnerController::class, 'index']);
 Route::get('/shop-owners/{id}', [ShopOwnerController::class, 'show']);
 Route::get('/shop-owners/{ownerId}/shops', [ShopController::class, 'getByOwner']);
@@ -58,14 +55,12 @@ Route::get('/shops', [ShopController::class, 'index']);
 Route::get('/shops/{id}', [ShopController::class, 'show']);
 Route::get('/shops/location/{location}', [ShopController::class, 'getByLocation']);
 Route::get('/shops/{shopId}/items', [ItemController::class, 'getByShop']);
-
 Route::get('/hotel-owners', [HotelOwnerController::class, 'index']);
 Route::get('/hotel-owners/{id}', [HotelOwnerController::class, 'show']);
 Route::get('/hotel-owners/{ownerId}/hotels', [HotelController::class, 'getByOwner']);
 Route::get('/hotels', [HotelController::class, 'index']);
 Route::get('/hotels/{id}', [HotelController::class, 'show']);
 Route::get('/hotels/location/{location}', [HotelController::class, 'getByLocation']);
-
 Route::get('/vehicle-owners', [VehicleOwnerController::class, 'index']);
 Route::get('/vehicle-owners/{id}', [VehicleOwnerController::class, 'show']);
 Route::get('/vehicle-owners/{ownerId}/vehicles', [VehicleController::class, 'getByOwner']);
@@ -82,18 +77,10 @@ Route::get('/website-reviews/recent/{limit?}', [WebsiteReviewController::class, 
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/user/profile', [AuthController::class, 'profile']);
     Route::post('/logout', [AuthController::class, 'logout']);
-
-    // Get user's role requests
-    Route::get('/user/role-requests', function (Request $request) {
-        return $request->user()->roleRequests()->with('role')->get();
-    });
-    // Role requests - accessible to any authenticated user
-    Route::post('/role-request', [RoleRequestController::class, 'store']);
-
     // Routes for guide of authenticated user
-    Route::get('/my-guide', [GuidesController::class, 'getByAuthenticatedUser']);
-    Route::put('/my-guide', [GuidesController::class, 'updateByAuthenticatedUser']);
-    Route::delete('/my-guide', [GuidesController::class, 'deleteByAuthenticatedUser']);
+    Route::get('/my-guide', [GuideController::class, 'getByAuthenticatedUser']);
+    Route::put('/my-guide', [GuideController::class, 'updateByAuthenticatedUser']);
+    Route::delete('/my-guide', [GuideController::class, 'deleteByAuthenticatedUser']);
     // Routes for shop owner of authenticated user
     Route::get('/my-shop-owner', [ShopOwnerController::class, 'getByAuthenticatedUser']);
     Route::put('/my-shop-owner', [ShopOwnerController::class, 'updateByAuthenticatedUser']);
@@ -103,12 +90,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/my-shops', [ShopController::class, 'storeByAuthenticatedOwner']);
     Route::put('/my-shops/{id}', [ShopController::class, 'updateByAuthenticatedOwner']);
     Route::delete('/my-shops/{id}', [ShopController::class, 'deleteByAuthenticatedOwner']);
-    // Routes for items of authenticated user
-    Route::get('/my-items', [ItemController::class, 'getByAuthenticatedUser']);
-    Route::post('/my-items', [ItemController::class, 'storeByAuthenticatedUser']);
-    Route::put('/my-items/{id}', [ItemController::class, 'updateByAuthenticatedUser']);
-    Route::delete('/my-items/{id}', [ItemController::class, 'deleteByAuthenticatedUser']);
-    Route::get('/my-shops/{shopId}/items', [ItemController::class, 'getByAuthenticatedShop']);
     // Routes for hotel owner of authenticated user
     Route::get('/my-hotel-owner', [HotelOwnerController::class, 'getByAuthenticatedUser']);
     Route::put('/my-hotel-owner', [HotelOwnerController::class, 'updateByAuthenticatedUser']);
@@ -123,10 +104,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::put('/my-vehicle-owner', [VehicleOwnerController::class, 'updateByAuthenticatedUser']);
     Route::delete('/my-vehicle-owner', [VehicleOwnerController::class, 'deleteByAuthenticatedUser']);
     // Routes for vehicles of authenticated user
+    Route::post('/check-registration-number-availability', [VehicleController::class, 'checkRegistrationNumber']);
     Route::get('/my-vehicles', [VehicleController::class, 'getByAuthenticatedOwner']);
     Route::post('/my-vehicles', [VehicleController::class, 'storeByAuthenticatedOwner']);
     Route::put('/my-vehicles/{id}', [VehicleController::class, 'updateByAuthenticatedOwner']);
     Route::delete('/my-vehicles/{id}', [VehicleController::class, 'deleteByAuthenticatedOwner']);
+
     // Review routes
     Route::get('/reviews', [ReviewController::class, 'index']);
     Route::get('/reviews/{id}', [ReviewController::class, 'show']);
@@ -140,6 +123,30 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/website-reviews/{id}', [WebsiteReviewController::class, 'update']);
     Route::delete('/website-reviews/{id}', [WebsiteReviewController::class, 'destroy']);
     Route::get('/user/website-reviews', [WebsiteReviewController::class, 'getUserWebsiteReviews']);
+
+    // Get user's role requests
+    Route::get('/user/role-requests', function (Request $request) {
+        return $request->user()->roleRequests()->with('role')->get();
+    });
+    // Role requests - accessible to any authenticated user
+    Route::post('/check-nic-availability', [RoleRequestController::class, 'checkNic']);
+    Route::post('/role-request', [RoleRequestController::class, 'store']);
+
+    // Role requests - accessible to any authenticated user
+    Route::prefix('role-requests')->group(function () {
+        Route::get('/', [RoleRequestController::class, 'index']);
+        Route::get('/pending', [RoleRequestController::class, 'getPendingRequests']);
+        Route::get('/{id}', [RoleRequestController::class, 'show']);
+        Route::post('/', [RoleRequestController::class, 'store']);
+        Route::delete('/{id}', [RoleRequestController::class, 'cancel']);
+        Route::get('/available-roles', [RoleRequestController::class, 'getAvailableRoles']);
+    });
+    // Routes for items of authenticated user
+    Route::get('/my-items', [ItemController::class, 'getByAuthenticatedUser']);
+    Route::post('/my-items', [ItemController::class, 'storeByAuthenticatedUser']);
+    Route::put('/my-items/{id}', [ItemController::class, 'updateByAuthenticatedUser']);
+    Route::delete('/my-items/{id}', [ItemController::class, 'deleteByAuthenticatedUser']);
+    Route::get('/my-shops/{shopId}/items', [ItemController::class, 'getByAuthenticatedShop']);
 });
 
 // Admin-only routes
@@ -149,9 +156,9 @@ Route::middleware(['auth:sanctum', 'role:Admin'])->group(function () {
     Route::put('/locations/{id}', [LocationsController::class, 'update']);
     Route::delete('/locations/{id}', [LocationsController::class, 'destroy']);
     // Guides routes (only create, update, delete - index/show are public)
-    Route::post('/guides', [GuidesController::class, 'store']);
-    Route::put('/guides/{id}', [GuidesController::class, 'update']);
-    Route::delete('/guides/{id}', [GuidesController::class, 'destroy']);
+    Route::post('/guides', [GuideController::class, 'store']);
+    Route::put('/guides/{id}', [GuideController::class, 'update']);
+    Route::delete('/guides/{id}', [GuideController::class, 'destroy']);
     // Shop Owners routes (only create, update, delete - index/show are public)
     Route::post('/shop-owners', [ShopOwnerController::class, 'store']);
     Route::put('/shop-owners/{id}', [ShopOwnerController::class, 'update']);
@@ -176,21 +183,18 @@ Route::middleware(['auth:sanctum', 'role:Admin'])->group(function () {
     Route::post('/vehicles', [VehicleController::class, 'store']);
     Route::put('/vehicles/{id}', [VehicleController::class, 'update']);
     Route::delete('/vehicles/{id}', [VehicleController::class, 'destroy']);
-    
-    // Other admin routes...
+    // User management routes
     Route::get('/users', [AuthController::class, 'getUsers']);
-    Route::post('/admin/users', [AuthController::class, 'registerAdmin']);
+    Route::post('/admin/users', [AuthController::class, 'registerUser']);
     Route::put('/admin/users/{id}', [AuthController::class, 'updateUser']);
     Route::delete('/admin/users/{id}', [AuthController::class, 'deleteUser']);
-    
-    Route::apiResource('items', ItemController::class);
-    Route::apiResource('location-hotel-reviews', LocationHotelReviewsController::class);
-    Route::apiResource('other-reviews', OtherReviewsController::class);
-    
-    // Role management routes
+    // Request management routes
     Route::prefix('admin')->group(function () {
         Route::get('/role-requests', [AdminRoleRequestController::class, 'index']);
-        Route::post('/role-requests/{id}/approve', [AdminRoleRequestController::class, 'approve']);
-        Route::post('/role-requests/{id}/reject', [AdminRoleRequestController::class, 'reject']);
+        Route::patch('/role-requests/{id}/approve', [AdminRoleRequestController::class, 'approve']);
+        Route::patch('/role-requests/{id}/reject', [AdminRoleRequestController::class, 'reject']);
+        Route::get('/role-requests/statistics', [AdminRoleRequestController::class, 'getStatistics']);
     });
+
+    Route::apiResource('other-reviews', OtherReviewsController::class);
 });
