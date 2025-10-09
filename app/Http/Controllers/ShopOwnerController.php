@@ -6,7 +6,6 @@ use Illuminate\Http\Request;
 use App\Models\ShopOwner;
 use App\Models\Role;
 use App\Models\User;
-use App\Models\RoleRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 
@@ -16,12 +15,21 @@ class ShopOwnerController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'shopOwnerName' => 'required|string|max:255',
-            'shopOwnerNic' => 'required|string|max:255',
-            'businessMail' => 'required|email',
-            'contactNumber' => 'required|string|max:15',
-            'user_id' => 'required|exists:users,id'
+            'shop_owner_name' => ['required', 'string', 'max:255'],
+            'shop_owner_nic' => ['required', 'string', 'max:24'],
+            'shop_owner_dob' => ['required', 'date'],
+            'shop_owner_address' => ['required', 'string', 'max:500'],
+            'business_mail' => ['required', 'email'],
+            'contact_number' => ['required', 'string', 'max:15'],
+            'whatsapp_number' => ['nullable', 'string', 'max:15'],
+            'user_id' => ['required', 'exists:users,id']
         ]);
+
+        // Check if NIC already exists in shop_owners table
+        $existingShopOwner = ShopOwner::where('shop_owner_nic', $request->shop_owner_nic)->first();
+        if ($existingShopOwner) {
+            return response()->json(['error' => 'This NIC is already registered as a shop owner in our system'], 422);
+        }
 
         // Get the shop owner role
         $shopOwnerRole = Role::where('name', 'shop_owner')->first();
@@ -33,40 +41,27 @@ class ShopOwnerController extends Controller
         // Get the user
         $user = User::findOrFail($request->user_id);
 
+        // Start transaction for data consistency
+        DB::beginTransaction();
+
         try {
-            // Use DB transaction for data consistency
-            $shopOwner = DB::transaction(function () use ($request, $user, $shopOwnerRole) {
-                $shopOwner = ShopOwner::create([
-                    'shopOwnerName' => $request->shopOwnerName,
-                    'shopOwnerNic' => $request->shopOwnerNic,
-                    'businessMail' => $request->businessMail,
-                    'contactNumber' => $request->contactNumber,
-                    'user_id' => $request->user_id,
-                ]);
+            // Create shop owner
+            $shopOwner = ShopOwner::create([
+                'shop_owner_name' => $request->shop_owner_name,
+                'shop_owner_nic' => $request->shop_owner_nic,
+                'shop_owner_dob' => $request->shop_owner_dob,
+                'shop_owner_address' => $request->shop_owner_address,
+                'business_mail' => $request->business_mail,
+                'contact_number' => $request->contact_number,
+                'whatsapp_number' => $request->whatsapp_number,
+                'user_id' => $request->user_id
+            ]);
 
-                // Attach shop owner role to user if not already attached
-                // Use syncWithoutDetaching to avoid duplicates
-                $user->roles()->syncWithoutDetaching([$shopOwnerRole->id]);
+            // Attach shop owner role to user if not already attached
+            // Use syncWithoutDetaching to avoid duplicates
+            $user->roles()->syncWithoutDetaching([$shopOwnerRole->id]);
 
-                // Create or update role request status to 'accepted'
-                RoleRequest::updateOrCreate(
-                    [
-                        'user_id' => $user->id,
-                        'role_id' => $shopOwnerRole->id,
-                    ],
-                    [
-                        'status' => 'accepted',
-                        'extra_data' => [
-                            'shopOwnerName' => $request->shopOwnerName,
-                            'shopOwnerNic' => $request->shopOwnerNic,
-                            'businessMail' => $request->businessMail,
-                            'contactNumber' => $request->contactNumber
-                        ]
-                    ]
-                );
-
-                return $shopOwner;
-            });
+            DB::commit();
 
             return response()->json([
                 'message' => 'Shop Owner created successfully!',
@@ -74,10 +69,8 @@ class ShopOwnerController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            \Log::error('Shop owner creation failed: ' . $e->getMessage());
-            return response()->json([
-                'error' => 'Failed to create shop owner: ' . $e->getMessage()
-            ], 500);
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to create shop owner: ' . $e->getMessage()], 500);
         }
     }
 
@@ -86,60 +79,82 @@ class ShopOwnerController extends Controller
         $shopOwner = ShopOwner::findOrFail($id);
 
         $validated = $request->validate([
-            'shopOwnerName' => 'sometimes|required|string|max:255',
-            'shopOwnerNic' => 'sometimes|required|string|max:255',
-            'businessMail' => 'sometimes|required|email',
-            'contactNumber' => 'sometimes|required|string|max:15',
-            'user_id' => 'sometimes|required|exists:users,id'
+            'shop_owner_name' => ['sometimes', 'required', 'string', 'max:255'],
+            'shop_owner_nic' => ['sometimes', 'required', 'string', 'max:24'],
+            'shop_owner_dob' => ['sometimes', 'required', 'date'],
+            'shop_owner_address' => ['sometimes', 'required', 'string', 'max:500'],
+            'business_mail' => ['sometimes', 'required', 'email'],
+            'contact_number' => ['sometimes', 'required', 'string', 'max:15'],
+            'whatsapp_number' => ['sometimes', 'nullable', 'string', 'max:15']
         ]);
 
-        // Update other fields
-        $shopOwner->fill($request->only([
-            'shopOwnerName', 'shopOwnerNic', 'businessMail', 'contactNumber'
-        ]));
+        // Check if NIC already exists in shop_owners table (excluding current shop owner)
+        if ($request->has('shop_owner_nic') && $request->shop_owner_nic !== $shopOwner->shop_owner_nic) {
+            $existingShopOwner = ShopOwner::where('shop_owner_nic', $request->shop_owner_nic)
+                ->where('id', '!=', $id)
+                ->first();
+            if ($existingShopOwner) {
+                return response()->json(['error' => 'This NIC is already registered as a shop owner in our system'], 422);
+            }
+        }
 
-        $shopOwner->save();
+        DB::beginTransaction();
 
-        return response()->json([
-            'message' => 'Shop Owner updated successfully!',
-            'shopOwner' => $shopOwner->fresh()
-        ]);
+        try {
+            // Update shop owner fields
+            $shopOwner->fill($request->only([
+                'shop_owner_name', 'shop_owner_nic', 'shop_owner_dob', 'shop_owner_address',
+                'business_mail', 'contact_number', 'whatsapp_number'
+            ]));
+
+            $shopOwner->save();
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Shop Owner updated successfully!',
+                'shopOwner' => $shopOwner
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to update shop owner: ' . $e->getMessage()], 500);
+        }
     }
 
     public function destroy($id)
     {
+        $shopOwner = ShopOwner::findOrFail($id);
+        $userId = $shopOwner->user_id;
+
+        DB::beginTransaction();
+
         try {
-            $shopOwner = ShopOwner::findOrFail($id);
-            $userId = $shopOwner->user_id;
-
-            DB::transaction(function () use ($shopOwner, $userId) {
-                // Get the shop owner role
-                $shopOwnerRole = Role::where('name', 'shop_owner')->first();
+            $shopOwnerRole = Role::where('name', 'shop_owner')->first();
                 
-                if ($shopOwnerRole) {
-                    // Remove the role from the user
-                    DB::table('role_user')
-                        ->where('user_id', $userId)
-                        ->where('role_id', $shopOwnerRole->id)
-                        ->delete();
+            if ($shopOwnerRole) {
+                // Remove the role from the user
+                DB::table('role_user')
+                    ->where('user_id', $userId)
+                    ->where('role_id', $shopOwnerRole->id)
+                    ->delete();
                     
-                    // DELETE the role requests record
-                    DB::table('role_requests')
-                        ->where('user_id', $shopOwner->user_id)
-                        ->where('role_id', $shopOwnerRole->id)
-                        ->delete();
-                }
+                // DELETE the role requests record
+                DB::table('role_requests')
+                    ->where('user_id', $shopOwner->user_id)
+                    ->where('role_id', $shopOwnerRole->id)
+                    ->delete();
+            }
 
-                $shopOwner->delete();
-            });
+            $shopOwner->delete();
+
+            DB::commit();
 
             return response()->json(['message' => 'Shop owner deleted successfully!']);
 
         } catch (\Exception $e) {
-            \Log::error('Shop owner deletion failed: ' . $e->getMessage());
-            return response()->json([
-                'error' => 'Failed to delete shop owner: ' . $e->getMessage()
-            ], 500);
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to delete shop owner: ' . $e->getMessage()], 500);
         }
     }
 
@@ -159,54 +174,77 @@ class ShopOwnerController extends Controller
     {
         $shopOwner = ShopOwner::where('user_id', $request->user()->id)->firstOrFail();
 
+        if (!$shopOwner) {
+            return response()->json(['error' => 'You do not have a shop owner profile.'], 403);
+        }
+
         $validated = $request->validate([
-            'shopOwnerName' => 'sometimes|required|string|max:255',
-            'shopOwnerNic' => 'sometimes|required|string|max:255',
-            'businessMail' => 'sometimes|required|email',
-            'contactNumber' => 'sometimes|required|string|max:15',
+            'shop_owner_name' => ['sometimes', 'required', 'string', 'max:255'],
+            'shop_owner_nic' => ['sometimes', 'required', 'string', 'max:24'],
+            'shop_owner_dob' => ['sometimes', 'required', 'date'],
+            'shop_owner_address' => ['sometimes', 'required', 'string', 'max:500'],
+            'business_mail' => ['sometimes', 'required', 'email'],
+            'contact_number' => ['sometimes', 'required', 'string', 'max:15'],
+            'whatsapp_number' => ['sometimes', 'nullable', 'string', 'max:15']
         ]);
 
-        $shopOwner->update($validated);
+        DB::beginTransaction();
 
-        return response()->json([
-            'message' => 'Shop Owner updated successfully!',
-            'shopOwner' => $shopOwner->fresh()
-        ]);
+        try {
+            // Update shop owner fields
+            $shopOwner->fill($request->only([
+                'shop_owner_name', 'shop_owner_nic', 'shop_owner_dob', 'shop_owner_address',
+                'business_mail', 'contact_number', 'whatsapp_number'
+            ]));
+
+            $shopOwner->save();
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Shop Owner updated successfully!',
+                'shopOwner' => $shopOwner
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to update shop owner: ' . $e->getMessage()], 500);
+        }
     }
 
     public function deleteByAuthenticatedUser(Request $request)
     {
-        try {
-            $shopOwner = ShopOwner::where('user_id', $request->user()->id)->firstOrFail();
-            
-            DB::transaction(function () use ($shopOwner) {
-                // Get the shop owner role
-                $shopOwnerRole = Role::where('name', 'shop_owner')->first();
-                
-                if ($shopOwnerRole) {
-                    // Remove the role from the user
-                    DB::table('role_user')
-                        ->where('user_id', $shopOwner->user_id)
-                        ->where('role_id', $shopOwnerRole->id)
-                        ->delete();
-                    
-                    // DELETE the role requests record
-                    DB::table('role_requests')
-                        ->where('user_id', $shopOwner->user_id)
-                        ->where('role_id', $shopOwnerRole->id)
-                        ->delete();
-                }
+        $shopOwner = ShopOwner::where('user_id', $request->user()->id)->firstOrFail();
+        $userId = $shopOwner->user_id;
 
-                $shopOwner->delete();
-            });
+        DB::beginTransaction();
+            
+        try {
+            $shopOwnerRole = Role::where('name', 'shop_owner')->first();
+                
+            if ($shopOwnerRole) {
+                // Remove the role from the user
+                DB::table('role_user')
+                    ->where('user_id', $userId)
+                    ->where('role_id', $shopOwnerRole->id)
+                    ->delete();
+                    
+                // DELETE the role requests record
+                DB::table('role_requests')
+                    ->where('user_id', $shopOwner->user_id)
+                    ->where('role_id', $shopOwnerRole->id)
+                    ->delete();
+            }
+
+            $shopOwner->delete();
+
+            DB::commit();
 
             return response()->json(['message' => 'Shop owner deleted successfully!']);
 
         } catch (\Exception $e) {
-            \Log::error('Shop owner deletion failed: ' . $e->getMessage());
-            return response()->json([
-                'error' => 'Failed to delete shop owner: ' . $e->getMessage()
-            ], 500);
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to delete shop owner: ' . $e->getMessage()], 500);
         }
     }
 
@@ -219,7 +257,7 @@ class ShopOwnerController extends Controller
 
     public function index()
     {
-        $shopOwners = ShopOwner::all();
+        $shopOwners = ShopOwner::get();
         return response()->json($shopOwners);
     }
 }

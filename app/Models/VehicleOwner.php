@@ -10,18 +10,21 @@ class VehicleOwner extends Model
     use HasFactory;
 
     protected $fillable = [
-        'vehicleOwnerName',
-        'vehicleOwnerNic',
-        'businessMail',
-        'personalNumber',
-        'whatsappNumber',
+        'vehicle_owner_name',
+        'vehicle_owner_nic',
+        'vehicle_owner_dob',
+        'vehicle_owner_address',
+        'business_mail',
+        'contact_number',
+        'whatsapp_number',
         'locations',
-        'description',
-        'user_id',
+        'user_id'
     ];
+
     protected $casts = [
         'locations' => 'array',
     ];
+
     public function vehicle()
     {
         return $this->hasMany(Vehicle::class);

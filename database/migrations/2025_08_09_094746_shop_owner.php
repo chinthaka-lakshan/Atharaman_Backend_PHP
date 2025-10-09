@@ -6,31 +6,24 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     *
-     * @return void
-     */
     public function up()
     {
         Schema::create('shop_owners', function (Blueprint $table) {
             $table->id();
-            $table->string('shopOwnerName');
-            $table->string('shopOwnerNic');
-            $table->string('businessMail');
-            $table->string('contactNumber');
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->string('shop_owner_name');
+            $table->string('shop_owner_nic', 24)->unique();
+            $table->date('shop_owner_dob');
+            $table->text('shop_owner_address');
+            $table->string('business_mail');
+            $table->string('contact_number', 15);
+            $table->string('whatsapp_number', 15)->nullable();
+            $table->foreignId('user_id')->unique()->constrained()->onDelete('cascade');
             $table->timestamps();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     *
-     * @return void
-     */
     public function down()
     {
-        Schema::dropIfExists('shop-owners');
+        Schema::dropIfExists('shop_owners');
     }
 };

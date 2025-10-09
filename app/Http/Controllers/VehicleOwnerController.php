@@ -6,7 +6,6 @@ use Illuminate\Http\Request;
 use App\Models\VehicleOwner;
 use App\Models\Role;
 use App\Models\User;
-use App\Models\RoleRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 
@@ -16,17 +15,24 @@ class VehicleOwnerController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'vehicleOwnerName' => 'required|string|max:255',
-            'vehicleOwnerNic' => 'required|string|max:255',
-            'businessMail' => 'required|email',
-            'personalNumber' => 'required|string|max:15',
-            'whatsappNumber' => 'nullable|string|max:15',
-            'locations' => 'nullable|array',
-            'description' => 'nullable|string',
-            'user_id' => 'required|exists:users,id'
+            'vehicle_owner_name' => ['required', 'string', 'max:255'],
+            'vehicle_owner_nic' => ['required', 'string', 'max:24'],
+            'vehicle_owner_dob' => ['required', 'date'],
+            'vehicle_owner_address' => ['required', 'string', 'max:500'],
+            'business_mail' => ['required', 'email'],
+            'contact_number' => ['required', 'string', 'max:15'],
+            'whatsapp_number' => ['nullable', 'string', 'max:15'],
+            'locations' => ['nullable', 'array'],
+            'user_id' => ['required', 'exists:users,id']
         ]);
 
-        // Get the shop owner role
+        // Check if NIC already exists in vehicle_owners table
+        $existingVehicleOwner = VehicleOwner::where('vehicle_owner_nic', $request->vehicle_owner_nic)->first();
+        if ($existingVehicleOwner) {
+            return response()->json(['error' => 'This NIC is already registered as a vehicle owner in our system'], 422);
+        }
+
+        // Get the vehicle owner role
         $vehicleOwnerRole = Role::where('name', 'vehicle_owner')->first();
         
         if (!$vehicleOwnerRole) {
@@ -36,46 +42,28 @@ class VehicleOwnerController extends Controller
         // Get the user
         $user = User::findOrFail($request->user_id);
 
+        // Start transaction for data consistency
+        DB::beginTransaction();
+
         try {
-            // Use DB transaction for data consistency
-            $vehicleOwner = DB::transaction(function () use ($request, $user, $vehicleOwnerRole) {
-                $vehicleOwner = VehicleOwner::create([
-                    'vehicleOwnerName' => $request->vehicleOwnerName,
-                    'vehicleOwnerNic' => $request->vehicleOwnerNic,
-                    'businessMail' => $request->businessMail,
-                    'personalNumber' => $request->personalNumber,
-                    'whatsappNumber' => $request->whatsappNumber,
-                    'locations' => $request->locations,
-                    'description' => $request->description,
-                    'user_id' => $request->user_id
-                ]);
+            // Create vehicle owner
+            $vehicleOwner = VehicleOwner::create([
+                'vehicle_owner_name' => $request->vehicle_owner_name,
+                'vehicle_owner_nic' => $request->vehicle_owner_nic,
+                'vehicle_owner_dob' => $request->vehicle_owner_dob,
+                'vehicle_owner_address' => $request->vehicle_owner_address,
+                'business_mail' => $request->business_mail,
+                'contact_number' => $request->contact_number,
+                'whatsapp_number' => $request->whatsapp_number,
+                'locations' => $request->locations,
+                'user_id' => $request->user_id
+            ]);
 
-                // Attach vehicle owner role to user if not already attached
-                // Use syncWithoutDetaching to avoid duplicates
-                $user->roles()->syncWithoutDetaching([$vehicleOwnerRole->id]);
+            // Attach vehicle owner role to user if not already attached
+            // Use syncWithoutDetaching to avoid duplicates
+            $user->roles()->syncWithoutDetaching([$vehicleOwnerRole->id]);
 
-                // Create or update role request status to 'accepted'
-                RoleRequest::updateOrCreate(
-                    [
-                        'user_id' => $user->id,
-                        'role_id' => $vehicleOwnerRole->id,
-                    ],
-                    [
-                        'status' => 'accepted',
-                        'extra_data' => [
-                            'vehicleOwnerName' => $request->vehicleOwnerName,
-                            'vehicleOwnerNic' => $request->vehicleOwnerNic,
-                            'businessMail' => $request->businessMail,
-                            'personalNumber' => $request->personalNumber,
-                            'whatsappNumber' => $request->whatsappNumber,
-                            'locations' => $request->locations,
-                            'description' => $request->description
-                        ]
-                    ]
-                );
-
-                return $vehicleOwner;
-            });
+            DB::commit();
 
             return response()->json([
                 'message' => 'Vehicle Owner created successfully!',
@@ -83,10 +71,8 @@ class VehicleOwnerController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            \Log::error('Vehicle owner creation failed: ' . $e->getMessage());
-            return response()->json([
-                'error' => 'Failed to create vehicle owner: ' . $e->getMessage()
-            ], 500);
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to create vehicle owner: ' . $e->getMessage()], 500);
         }
     }
 
@@ -95,67 +81,85 @@ class VehicleOwnerController extends Controller
         $vehicleOwner = VehicleOwner::findOrFail($id);
 
         $validated = $request->validate([
-            'vehicleOwnerName' => 'sometimes|required|string|max:255',
-            'vehicleOwnerNic' => 'sometimes|required|string|max:255',
-            'businessMail' => 'sometimes|required|email',
-            'personalNumber' => 'sometimes|required|string|max:15',
-            'whatsappNumber' => 'nullable|string|max:15',
-            'locations' => 'nullable|array',
-            'description' => 'nullable|string',
-            'user_id' => 'sometimes|required|exists:users,id'
+            'vehicle_owner_name' => ['sometimes', 'required', 'string', 'max:255'],
+            'vehicle_owner_nic' => ['sometimes', 'required', 'string', 'max:24'],
+            'vehicle_owner_dob' => ['sometimes', 'required', 'date'],
+            'vehicle_owner_address' => ['sometimes', 'required', 'string', 'max:500'],
+            'business_mail' => ['sometimes', 'required', 'email'],
+            'contact_number' => ['sometimes', 'required', 'string', 'max:15'],
+            'whatsapp_number' => ['sometimes', 'nullable', 'string', 'max:15'],
+            'locations' => ['sometimes', 'nullable', 'array']
         ]);
 
-        $vehicleOwner->fill($request->only([
-            'vehicleOwnerName', 'vehicleOwnerNic', 'businessMail',
-            'personalNumber', 'whatsappNumber', 'description'
-        ]));
-
-        if ($request->has('locations')) {
-            $vehicleOwner->locations = $request->locations;
+        // Check if NIC already exists in vehicle_owners table (excluding current vehicle owner)
+        if ($request->has('vehicle_owner_nic') && $request->vehicle_owner_nic !== $vehicleOwner->vehicle_owner_nic) {
+            $existingVehicleOwner = VehicleOwner::where('vehicle_owner_nic', $request->vehicle_owner_nic)
+                ->where('id', '!=', $id)
+                ->first();
+            if ($existingVehicleOwner) {
+                return response()->json(['error' => 'This NIC is already registered as a vehicle owner in our system'], 422);
+            }
         }
 
-        $vehicleOwner->save();
+        DB::beginTransaction();
 
-        return response()->json([
-            'message' => 'Vehicle Owner updated successfully!',
-            'vehicleOwner' => $vehicleOwner->fresh()
-        ]);
+        try {
+            $vehicleOwner->locations = $request->has('locations') ? $request->locations : null;
+
+            // Update vehicle owner fields
+            $vehicleOwner->fill($request->only([
+                'vehicle_owner_name', 'vehicle_owner_nic', 'vehicle_owner_dob', 'vehicle_owner_address',
+                'business_mail', 'contact_number', 'whatsapp_number'
+            ]));
+
+            $vehicleOwner->save();
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Vehicle Owner updated successfully!',
+                'vehicleOwner' => $vehicleOwner
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to update vehicle owner: ' . $e->getMessage()], 500);
+        }
     }
 
     public function destroy($id)
     {
+        $vehicleOwner = VehicleOwner::findOrFail($id);
+        $userId = $vehicleOwner->user_id;
+
+        DB::beginTransaction();
+
         try {
-            $vehicleOwner = VehicleOwner::findOrFail($id);
-            $userId = $vehicleOwner->user_id;
-
-            DB::transaction(function () use ($vehicleOwner, $userId) {
-                // Get the vehicle owner role
-                $vehicleOwnerRole = Role::where('name', 'vehicle_owner')->first();
+            $vehicleOwnerRole = Role::where('name', 'vehicle_owner')->first();
                 
-                if ($vehicleOwnerRole) {
-                    // Remove the role from the user
-                    DB::table('role_user')
-                        ->where('user_id', $userId)
-                        ->where('role_id', $vehicleOwnerRole->id)
-                        ->delete();
+            if ($vehicleOwnerRole) {
+                // Remove the role from the user
+                DB::table('role_user')
+                    ->where('user_id', $userId)
+                    ->where('role_id', $vehicleOwnerRole->id)
+                    ->delete();
 
-                    // DELETE the role requests record
-                    DB::table('role_requests')
-                        ->where('user_id', $vehicleOwner->user_id)
-                        ->where('role_id', $vehicleOwnerRole->id)
-                        ->delete();
-                }
+                // DELETE the role requests record
+                DB::table('role_requests')
+                    ->where('user_id', $vehicleOwner->user_id)
+                    ->where('role_id', $vehicleOwnerRole->id)
+                    ->delete();
+            }
 
-                $vehicleOwner->delete();
-            });
+            $vehicleOwner->delete();
+
+            DB::commit();
 
             return response()->json(['message' => 'Vehicle owner deleted successfully!']);
 
         } catch (\Exception $e) {
-            \Log::error('Vehicle owner deletion failed: ' . $e->getMessage());
-            return response()->json([
-                'error' => 'Failed to delete vehicle owner: ' . $e->getMessage()
-            ], 500);
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to delete vehicle owner: ' . $e->getMessage()], 500);
         }
     }
 
@@ -175,57 +179,80 @@ class VehicleOwnerController extends Controller
     {
         $vehicleOwner = VehicleOwner::where('user_id', $request->user()->id)->firstOrFail();
 
+        if (!$vehicleOwner) {
+            return response()->json(['error' => 'You do not have a vehicle owner profile.'], 403);
+        }
+
         $validated = $request->validate([
-            'vehicleOwnerName' => 'sometimes|required|string|max:255',
-            'vehicleOwnerNic' => 'sometimes|required|string|max:255',
-            'businessMail' => 'sometimes|required|email',
-            'personalNumber' => 'sometimes|required|string|max:15',
-            'whatsappNumber' => 'nullable|string|max:15',
-            'locations' => 'nullable|array',
-            'description' => 'nullable|string'
+            'vehicle_owner_name' => ['sometimes', 'required', 'string', 'max:255'],
+            'vehicle_owner_nic' => ['sometimes', 'required', 'string', 'max:24'],
+            'vehicle_owner_dob' => ['sometimes', 'required', 'date'],
+            'vehicle_owner_address' => ['sometimes', 'required', 'string', 'max:500'],
+            'business_mail' => ['sometimes', 'required', 'email'],
+            'contact_number' => ['sometimes', 'required', 'string', 'max:15'],
+            'whatsapp_number' => ['sometimes', 'nullable', 'string', 'max:15'],
+            'locations' => ['sometimes', 'nullable', 'array']
         ]);
 
-        $vehicleOwner->update($validated);
+        DB::beginTransaction();
 
-        return response()->json([
-            'message' => 'Vehicle Owner updated successfully!',
-            'vehicleOwner' => $vehicleOwner->fresh()
-        ]);
+        try {
+            $vehicleOwner->locations = $request->has('locations') ? $request->locations : null;
+
+            // Update vehicle owner fields
+            $vehicleOwner->fill($request->only([
+                'vehicle_owner_name', 'vehicle_owner_nic', 'vehicle_owner_dob', 'vehicle_owner_address',
+                'business_mail', 'contact_number', 'whatsapp_number'
+            ]));
+
+            $vehicleOwner->save();
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Vehicle Owner updated successfully!',
+                'vehicleOwner' => $vehicleOwner
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to update vehicle owner: ' . $e->getMessage()], 500);
+        }
     }
 
     public function deleteByAuthenticatedUser(Request $request)
     {
-        try {
-            $vehicleOwner = VehicleOwner::where('user_id', $request->user()->id)->firstOrFail();
-            
-            DB::transaction(function () use ($vehicleOwner) {
-                // Get the vehicle owner role
-                $vehicleOwnerRole = Role::where('name', 'vehicle_owner')->first();
-                
-                if ($vehicleOwnerRole) {
-                    // Remove the role from the user
-                    DB::table('role_user')
-                        ->where('user_id', $vehicleOwner->user_id)
-                        ->where('role_id', $vehicleOwnerRole->id)
-                        ->delete();
-                    
-                    // DELETE the role requests record
-                    DB::table('role_requests')
-                        ->where('user_id', $vehicleOwner->user_id)
-                        ->where('role_id', $vehicleOwnerRole->id)
-                        ->delete();
-                }
+        $vehicleOwner = VehicleOwner::where('user_id', $request->user()->id)->firstOrFail();
+        $userId = $vehicleOwner->user_id;
 
-                $vehicleOwner->delete();
-            });
+        DB::beginTransaction();
+        
+        try {
+            $vehicleOwnerRole = Role::where('name', 'vehicle_owner')->first();
+                
+            if ($vehicleOwnerRole) {
+                // Remove the role from the user
+                DB::table('role_user')
+                    ->where('user_id', $userId)
+                    ->where('role_id', $vehicleOwnerRole->id)
+                    ->delete();
+                
+                // DELETE the role requests record
+                DB::table('role_requests')
+                    ->where('user_id', $vehicleOwner->user_id)
+                    ->where('role_id', $vehicleOwnerRole->id)
+                    ->delete();
+            }
+
+            $vehicleOwner->delete();
+
+            DB::commit();
 
             return response()->json(['message' => 'Vehicle owner deleted successfully!']);
 
         } catch (\Exception $e) {
-            \Log::error('Vehicle owner deletion failed: ' . $e->getMessage());
-            return response()->json([
-                'error' => 'Failed to delete vehicle owner: ' . $e->getMessage()
-            ], 500);
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to delete vehicle owner: ' . $e->getMessage()], 500);
         }
     }
 
@@ -238,7 +265,7 @@ class VehicleOwnerController extends Controller
 
     public function index()
     {
-        $vehicleOwners = VehicleOwner::all();
+        $vehicleOwners = VehicleOwner::get();
         return response()->json($vehicleOwners);
     }
 

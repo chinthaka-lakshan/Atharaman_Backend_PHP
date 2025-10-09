@@ -4,6 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Role;
 use App\Models\RoleRequest;
+use App\Models\Guide;
+use App\Models\ShopOwner;
+use App\Models\HotelOwner;
+use App\Models\VehicleOwner;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -18,12 +22,12 @@ class RoleRequestController extends Controller
         $role = Role::find($request->role_id);
         $user = Auth::user();
 
-        // Check if already has role
+        // Check if user already has this role
         if ($user->roles()->where('role_id', $role->id)->exists()) {
             return response()->json(['message' => 'You already have this role'], 400);
         }
 
-        // Check if request already pending
+        // Check for existing pending request
         if (RoleRequest::where('user_id', $user->id)
                 ->where('role_id', $role->id)
                 ->where('status', 'pending')
@@ -33,74 +37,100 @@ class RoleRequestController extends Controller
 
         // Dynamic validation based on role
         $extraDataRules = [];
+        $nicField = '';
+        
         switch ($role->name) {
             case 'guide':
                 $extraDataRules = [
-                    'extra_data.guideName' => 'required|string|max:20',
-                    'extra_data.guideNic' => 'required|string|max:12',
-                    'extra_data.businessMail' => 'required|email|max:100',
-                    'extra_data.personalNumber' => 'required|string|max:15',
-                    'extra_data.whatsappNumber' => 'required|string|max:15',
-                    'extra_data.guideImage' => 'required|array',
-                    'extra_data.languages' => 'required|array',
-                    'extra_data.locations' => 'required|array',
-                    'extra_data.description' => 'required|string|max:500'
+                    'extra_data.guide_name' => 'required|string|max:255',
+                    'extra_data.guide_nic' => 'required|string|max:24',
+                    'extra_data.guide_dob' => 'required|date',
+                    'extra_data.guide_gender' => 'required|string|max:15',
+                    'extra_data.guide_address' => 'required|string|max:500',
+                    'extra_data.business_mail' => 'required|email',
+                    'extra_data.contact_number' => 'required|string|max:15',
+                    'extra_data.whatsapp_number' => 'nullable|string|max:15',
+                    'extra_data.short_description' => 'required|string|max:1000',
+                    'extra_data.long_description' => 'nullable|string|max:10000',
+                    'extra_data.languages' => 'nullable|array',
+                    'extra_data.locations' => 'nullable|array',
+                    'extra_data.guide_images' => 'nullable|array|max:5',
+                    'extra_data.guide_images.*' => 'nullable|string'
                 ];
+                $nicField = 'guide_nic';
                 break;
 
             case 'shop_owner':
                 $extraDataRules = [
-                    'extra_data.shopOwnerName' => 'required|string|max:100',
-                    'extra_data.shopOwnerNic' => 'required|string|max:12',
-                    'extra_data.businessMail' => 'required|email|max:100',
-                    'extra_data.contactNumber' => 'required|string|max:15',
+                    'extra_data.shop_owner_name' => 'required|string|max:255',
+                    'extra_data.shop_owner_nic' => 'required|string|max:24',
+                    'extra_data.shop_owner_dob' => 'required|date',
+                    'extra_data.shop_owner_address' => 'required|string|max:500',
+                    'extra_data.business_mail' => 'required|email',
+                    'extra_data.contact_number' => 'required|string|max:15',
+                    'extra_data.whatsapp_number' => 'nullable|string|max:15',
                 ];
+                $nicField = 'shop_owner_nic';
                 break;
 
             case 'hotel_owner':
                 $extraDataRules = [
-                    'extra_data.hotelOwnerName' => 'required|string|max:100',
-                    'extra_data.hotelOwnerNic' => 'required|string|max:12',
-                    'extra_data.businessMail' => 'required|email|max:100',
-                    'extra_data.contactNumber' => 'required|string|max:15',
+                    'extra_data.hotel_owner_name' => 'required|string|max:255',
+                    'extra_data.hotel_owner_nic' => 'required|string|max:24',
+                    'extra_data.hotel_owner_dob' => 'required|date',
+                    'extra_data.hotel_owner_address' => 'required|string|max:500',
+                    'extra_data.business_mail' => 'required|email',
+                    'extra_data.contact_number' => 'required|string|max:15',
+                    'extra_data.whatsapp_number' => 'nullable|string|max:15',
                 ];
+                $nicField = 'hotel_owner_nic';
                 break;
 
             case 'vehicle_owner':
                 $extraDataRules = [
-                    'extra_data.vehicleOwnerName' => 'required|string|max:100',
-                    'extra_data.vehicleOwnerNic' => 'required|string|max:12',
-                    'extra_data.businessMail' => 'required|email|max:100',
-                    'extra_data.personalNumber' => 'required|string|max:15',
-                    'extra_data.whatsappNumber' => 'required|string|max:15',
-                    'extra_data.locations' => 'required|array',
-                    'extra_data.description' => 'required|string|max:500'
+                    'extra_data.vehicle_owner_name' => 'required|string|max:255',
+                    'extra_data.vehicle_owner_nic' => 'required|string|max:24',
+                    'extra_data.vehicle_owner_dob' => 'required|date',
+                    'extra_data.vehicle_owner_address' => 'required|string|max:500',
+                    'extra_data.business_mail' => 'required|email',
+                    'extra_data.contact_number' => 'required|string|max:15',
+                    'extra_data.whatsapp_number' => 'nullable|string|max:15',
+                    'extra_data.locations' => 'nullable|array',
                 ];
+                $nicField = 'vehicle_owner_nic';
                 break;
         }
 
         $request->validate($extraDataRules);
 
+        // Check if NIC already exists in the same business role table (for ANY user)
+        $nicExists = $this->checkNicExistsInRoleTable($role->name, $request->extra_data[$nicField]);
+        if ($nicExists) {
+            return response()->json([
+                'message' => 'This NIC is already registered as a ' . str_replace('_', ' ', $role->name) . ' in our system'
+            ], 400);
+        }
+
         // Handle image uploads for guide role
         $uploadedImages = [];
-        if ($role->name === 'guide' && !empty($request->extra_data['guideImage'])) {
-            foreach ($request->extra_data['guideImage'] as $imageData) {
-                // Handle base64 images
+        if ($role->name === 'guide' && !empty($request->extra_data['guide_images'])) {
+            foreach ($request->extra_data['guide_images'] as $index => $imageData) {
                 if (is_string($imageData) && strpos($imageData, 'data:image/') === 0) {
-                    // This is a base64 image - save it properly
-                    $imagePath = $this->saveBase64Image($imageData, 'guides');
-                    $uploadedImages[] = $imagePath;
-                } else {
-                    // This is already a filename or invalid data
-                    $uploadedImages[] = $imageData;
+                    $imagePath = $this->saveBase64Image($imageData, 'guide-requests');
+                    $uploadedImages[] = [
+                        'path' => $imagePath,
+                        'order_index' => $index,
+                        'alt_text' => 'Guide image ' . ($index + 1)
+                    ];
                 }
             }
             
-            // Update the extra_data with processed images
-            $request->merge(['extra_data' => array_merge(
-                $request->extra_data,
-                ['guideImage' => $uploadedImages]
-            )]);
+            if (!empty($uploadedImages)) {
+                $request->merge(['extra_data' => array_merge(
+                    $request->extra_data,
+                    ['guide_images_processed' => $uploadedImages]
+                )]);
+            }
         }
 
         // Save request
@@ -114,7 +144,61 @@ class RoleRequestController extends Controller
         return response()->json(['message' => 'Request submitted successfully']);
     }
 
-    // Add this helper method
+    /**
+     * Check if NIC already exists in the specific role table (for any user)
+     */
+    private function checkNicExistsInRoleTable($roleName, $nic)
+    {
+        switch ($roleName) {
+            case 'guide':
+                return Guide::where('guide_nic', $nic)->exists();
+                
+            case 'shop_owner':
+                return ShopOwner::where('shop_owner_nic', $nic)->exists();
+                
+            case 'hotel_owner':
+                return HotelOwner::where('hotel_owner_nic', $nic)->exists();
+                
+            case 'vehicle_owner':
+                return VehicleOwner::where('vehicle_owner_nic', $nic)->exists();
+                
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * Check NIC availability (for real-time validation)
+     */
+    public function checkNic(Request $request)
+    {
+        $request->validate([
+            'nic' => 'required|string|max:24',
+            'role' => 'required|string|in:guide,shop_owner,hotel_owner,vehicle_owner'
+        ]);
+
+        $nic = $request->nic;
+        $role = $request->role;
+
+        $exists = $this->checkNicExistsInRoleTable($role, $nic);
+
+        if ($exists) {
+            $roleName = str_replace('_', ' ', $role);
+            return response()->json([
+                'available' => false,
+                'message' => "This NIC is already registered as a {$roleName} in our system"
+            ]);
+        }
+
+        return response()->json([
+            'available' => true,
+            'message' => 'NIC is available'
+        ]);
+    }
+
+    /**
+     * Save base64 image to storage
+     */
     private function saveBase64Image($base64Data, $folder = 'guides')
     {
         list($type, $data) = explode(';', $base64Data);

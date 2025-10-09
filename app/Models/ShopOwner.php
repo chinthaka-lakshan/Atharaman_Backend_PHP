@@ -10,12 +10,16 @@ class ShopOwner extends Model
     use HasFactory;
 
     protected $fillable = [
-        'shopOwnerName',
-        'shopOwnerNic',
-        'businessMail',
-        'contactNumber',
-        'user_id',
+        'shop_owner_name',
+        'shop_owner_nic',
+        'shop_owner_dob',
+        'shop_owner_address',
+        'business_mail',
+        'contact_number',
+        'whatsapp_number',
+        'user_id'
     ];
+
     public function shop()
     {
         return $this->hasMany(Shop::class);

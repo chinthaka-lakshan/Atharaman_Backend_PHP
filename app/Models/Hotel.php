@@ -8,20 +8,22 @@ use Illuminate\Database\Eloquent\Model;
 class Hotel extends Model
 {
     use HasFactory;
+
     protected $fillable = [
-        'hotelName',
-        'hotelAddress',
-        'businessMail',
-        'contactNumber',
-        'whatsappNumber',
-        'hotelImage',
+        'hotel_name',
+        'nearest_city',
+        'hotel_address',
+        'business_mail',
+        'contact_number',
+        'whatsapp_number',
+        'short_description',
+        'long_description',
         'locations',
-        'description',
         'user_id',
         'hotel_owner_id',
     ];
+
     protected $casts = [
-        'hotelImage' => 'array',
         'locations' => 'array',
     ];
     
@@ -29,6 +31,12 @@ class Hotel extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function images()
+    {
+        return $this->hasMany(HotelImage::class, 'hotel_id')->orderBy('order_index');
+    }
+
     public function hotelOwner()
     {
         return $this->belongsTo(HotelOwner::class, 'hotel_owner_id');
@@ -47,5 +55,17 @@ class Hotel extends Model
     public function getReviewCountAttribute()
     {
         return $this->reviews()->count();
+    }
+
+    // Helper method to get first image (for thumbnails)
+    public function getFeaturedImageAttribute()
+    {
+        return $this->images->first();
+    }
+
+    // Helper method to get all image URLs
+    public function getImageUrlsAttribute()
+    {
+        return $this->images->pluck('image_url');
     }
 }
