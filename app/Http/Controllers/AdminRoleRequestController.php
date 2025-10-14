@@ -13,9 +13,15 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail; // Added for email functionality
+use App\Mail\RoleRequestApproved;    // Added Mailable
+use App\Mail\RoleRequestRejected;    // Added Mailable
 
 class AdminRoleRequestController extends Controller
 {
+    /**
+     * Display a list of pending role requests.
+     */
     public function index() {
         // Check if user is admin
         if (Auth::user()->role !== 'Admin') {
@@ -25,6 +31,9 @@ class AdminRoleRequestController extends Controller
         return RoleRequest::with(['user', 'role'])->where('status', 'pending')->get();
     }
 
+    /**
+     * Approve a specific role request.
+     */
     public function approve($id) {
         // Check if user is admin
         if (Auth::user()->role !== 'Admin') {
@@ -36,6 +45,7 @@ class AdminRoleRequestController extends Controller
             return response()->json(['error' => 'Unauthorized. Admin access required.'], 403);
         }
 
+        // Fetch with user and role for profile creation and email
         $request = RoleRequest::with(['user', 'role'])->findOrFail($id);
         
         Log::info('Admin approval process started', [
@@ -112,6 +122,18 @@ class AdminRoleRequestController extends Controller
             }
         });
 
+        // ⭐ NEW: Send approval email after successful transaction
+        try {
+            Log::debug('Attempting to send approval email', ['user_email' => $request->user->email]);
+            Mail::to($request->user->email)->send(new RoleRequestApproved($request));
+            Log::info('Approval email queued successfully', ['user_id' => $request->user_id]);
+        } catch (\Exception $e) {
+            Log::warning('Failed to send approval email', [
+                'user_id' => $request->user_id,
+                'error' => $e->getMessage()
+            ]);
+        }
+        
         return response()->json(['message' => 'Request approved']);
     }
 
@@ -269,6 +291,9 @@ class AdminRoleRequestController extends Controller
         }
     }
 
+    /**
+     * Reject a specific role request.
+     */
     public function reject($id) {
         if (Auth::user()->role !== 'Admin') {
             Log::error('Unauthorized rejection attempt', [
@@ -278,7 +303,8 @@ class AdminRoleRequestController extends Controller
             return response()->json(['error' => 'Unauthorized. Admin access required.'], 403);
         }
 
-        $request = RoleRequest::findOrFail($id);
+        // Fetch with user and role for email
+        $request = RoleRequest::with(['user', 'role'])->findOrFail($id);
         
         Log::info('Admin rejecting request', [
             'request_id' => $id,
@@ -295,6 +321,18 @@ class AdminRoleRequestController extends Controller
         Log::info('Request rejected successfully', [
             'request_id' => $id
         ]);
+
+        // ⭐ NEW: Send rejection email after successful update
+        try {
+            Log::debug('Attempting to send rejection email', ['user_email' => $request->user->email]);
+            Mail::to($request->user->email)->send(new RoleRequestRejected($request));
+            Log::info('Rejection email queued successfully', ['user_id' => $request->user_id]);
+        } catch (\Exception $e) {
+            Log::warning('Failed to send rejection email', [
+                'user_id' => $request->user_id,
+                'error' => $e->getMessage()
+            ]);
+        }
         
         return response()->json(['message' => 'Request rejected']);
     }
@@ -344,6 +382,9 @@ class AdminRoleRequestController extends Controller
         }
     }
 
+    /**
+     * Get role request statistics.
+     */
     public function getStatistics()
     {
         if (Auth::user()->role !== 'Admin') {
