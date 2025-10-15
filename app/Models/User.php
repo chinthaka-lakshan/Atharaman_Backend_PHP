@@ -94,15 +94,22 @@ class User extends Authenticatable
         return $this->roles()->where('name', $roleName)->exists();
     }
 
-    public function hasBusinessRole()
-    {
+
+    // Check if user has any business roles
+    public function hasBusinessRole() {
         return $this->roles()->whereIn('name', ['guide', 'shop_owner', 'hotel_owner', 'vehicle_owner'])->exists();
     }
 
-    public function getBusinessRoles()
-    {
+    // Get all business roles user has
+    public function getBusinessRoles() {
         return $this->roles()->whereIn('name', ['guide', 'shop_owner', 'hotel_owner', 'vehicle_owner'])->get();
     }
+
+    /**
+     * The attributes that should be hidden for serialization.
+     *
+     * @var array<int, string>
+     */
 
     protected $hidden = [
         'password',
@@ -113,8 +120,10 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
     ];
 
-    public function loadBusinessProfile()
-    {
+
+    // Easily load all relationships for profile
+    public function loadBusinessProfile() {
+
         return $this->load([
             'roles',
             'guide',
