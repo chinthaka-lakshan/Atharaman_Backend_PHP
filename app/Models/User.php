@@ -7,17 +7,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use App\Notifications\CustomResetPassword;
 
 class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<int, string>
-     */
     protected $fillable = [
         'name',
         'email',
@@ -29,108 +23,105 @@ class User extends Authenticatable
     {
         return $this->getKey();
     }
+
     public function getJWTCustomClaims()
     {
         return [];
+    }
+
+    public function isAdmin()
+    {
+        return $this->role === 'Admin';
     }
 
     public function guide()
     {
         return $this->hasOne(Guide::class);
     }
+
     public function shopOwner()
     {
         return $this->hasOne(ShopOwner::class);
     }
+
     public function hotelOwner()
     {
         return $this->hasOne(HotelOwner::class);
     }
+
     public function vehicleOwner()
     {
         return $this->hasOne(VehicleOwner::class);
     }
+
     public function hotels()
     {
         return $this->hasMany(Hotel::class);
     }
+
     public function vehicles()
     {
         return $this->hasMany(Vehicle::class);
     }
+
     public function shops()
     {
         return $this->hasMany(Shop::class);
     }
-    public function otherReviews()
+
+    public function reviews()
     {
-        return $this->hasMany(OtherReviews::class);
-    }
-    public function locationHotelReviews()
-    {
-        return $this->hasMany(LocationHotelReviews::class);
+        return $this->hasMany(Review::class);
     }
 
+    public function websiteReviews()
+    {
+        return $this->hasMany(WebsiteReview::class);
+    }
 
-    public function roles() {
+    public function roles()
+    {
         return $this->belongsToMany(Role::class, 'role_user', 'user_id', 'role_id');
     }
 
-    public function roleRequests() {
+    public function roleRequests()
+    {
         return $this->hasMany(RoleRequest::class);
     }
 
-    public function hasRole($roleName) {
+    public function hasRole($roleName)
+    {
         return $this->roles()->where('name', $roleName)->exists();
     }
 
-    // NEW METHOD: Check if user has any business roles
-    public function hasBusinessRole() {
+    public function hasBusinessRole()
+    {
         return $this->roles()->whereIn('name', ['guide', 'shop_owner', 'hotel_owner', 'vehicle_owner'])->exists();
     }
 
-    // NEW METHOD: Get all business roles user has
-    public function getBusinessRoles() {
+    public function getBusinessRoles()
+    {
         return $this->roles()->whereIn('name', ['guide', 'shop_owner', 'hotel_owner', 'vehicle_owner'])->get();
     }
 
-
-   public function sendPasswordResetNotification($token)
-{
-    $url = config('app.frontend_url') . '/reset-password?token=' . $token . '&email=' . urlencode($this->email);
-
-    $this->notify(new CustomResetPassword($token, $url));
-}
-
-
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var array<int, string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * The attributes that should be cast.
-     *
-     * @var array<string, string>
-     */
     protected $casts = [
         'email_verified_at' => 'datetime',
     ];
 
-    // NEW: Add this method to easily load all relationships for profile
-    public function loadBusinessProfile() {
+    public function loadBusinessProfile()
+    {
         return $this->load([
             'roles',
             'guide',
-            'shopOwner', 
+            'shopOwner',
             'hotelOwner',
             'vehicleOwner',
-            'roleRequests'
+            'roleRequests',
         ]);
     }
 }

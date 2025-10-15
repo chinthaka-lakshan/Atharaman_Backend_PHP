@@ -20,7 +20,6 @@ return new class extends Migration
             $table->unsignedBigInteger('entity_id');
             $table->integer('rating')->unsigned()->check('rating >= 1 AND rating <= 5');
             $table->text('comment')->nullable();
-            $table->json('images')->nullable(); // Array of image URLs (max 5)
             $table->timestamps();
             
             // Composite index for efficient querying

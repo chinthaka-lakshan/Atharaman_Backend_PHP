@@ -4,9 +4,13 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Shop;
+use App\Models\ShopImage;
 use App\Models\ShopOwner;
+use App\Models\User;
+use App\Models\Review;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class ShopController extends Controller
 {
@@ -14,113 +18,164 @@ class ShopController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'shopName' => 'required|string|max:255',
-            'shopAddress' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'locations' => 'nullable|array',
-            'shopImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'shop_owner_id' => 'required|exists:shop_owners,id',
-            'user_id' => 'required|exists:users,id'
+            'shop_name' => ['required', 'string', 'max:255'],
+            'nearest_city' => ['required', 'string', 'max:100'],
+            'shop_address' => ['nullable', 'string', 'max:500'],
+            'contact_number' => ['required', 'string', 'max:15'],
+            'whatsapp_number' => ['nullable', 'string', 'max:15'],
+            'short_description' => ['required', 'string', 'max:1000'],
+            'long_description' => ['nullable', 'string', 'max:10000'],
+            'locations' => ['nullable', 'array'],
+            'shop_owner_id' => ['required', 'exists:shop_owners,id'],
+            'user_id' => ['required', 'exists:users,id'],
+            'shopImage' => ['nullable', 'array', 'max:5'],
+            'shopImage.*' => ['image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048']
         ]);
 
-        $images =[];
-        if ($request->hasFile('shopImage')) {
-            $images = [];
-            foreach ($request->file('shopImage') as $image) {
-                $path = $image->store('shops', 'public'); 
-                $images[] = $path;
+        // Start transaction for data consistency
+        DB::beginTransaction();
+
+        try {
+            // Create shop
+            $shop = Shop::create([
+                'shop_name' => $request->shop_name,
+                'nearest_city' => $request->nearest_city,
+                'shop_address' => $request->shop_address,
+                'contact_number' => $request->contact_number,
+                'whatsapp_number' => $request->whatsapp_number,
+                'short_description' => $request->short_description,
+                'long_description' => $request->long_description,
+                'locations' => $request->locations,
+                'shop_owner_id' => $request->shop_owner_id,
+                'user_id' => $request->user_id
+            ]);
+
+            // Handle image uploads with shop-specific folder
+            if ($request->hasFile('shopImage')) {
+                $this->processImages($shop, $request->file('shopImage'));
             }
+
+            DB::commit();
+
+            // Load images for response
+            $shop->load('images');
+
+            return response()->json([
+                'message' => 'Shop created successfully!',
+                'shop' => $shop
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to create shop: ' . $e->getMessage()], 500);
         }
-
-        $shop = Shop::create([
-            'shopName' => $request->shopName,
-            'shopAddress' => $request->shopAddress,
-            'description' => $request->description,
-            'shopImage' => $images,
-            'locations' => $request->locations,
-            'user_id' => $request->user_id,
-            'shop_owner_id' => $request->shop_owner_id
-        ]);
-
-        return response()->json([
-            'message' => 'Shop created successfully!',
-            'shop' => $shop
-        ]);
     }
 
     public function update(Request $request, $id)
     {
-        $shop = Shop::findOrFail($id);
-        $existingImages = $shop->shopImage ?? [];
+        $shop = Shop::with('images')->findOrFail($id);
 
         $validated = $request->validate([
-            'shopName' => 'sometimes|required|string|max:255',
-            'shopAddress' => 'sometimes|required|string|max:255',
-            'description' => 'nullable|string',
-            'locations' => 'nullable|array',
-            'shopImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-            'user_id' => 'sometimes|required|exists:users,id',
-            'shop_owner_id' => 'sometimes|required|exists:shop_owners,id'
+            'shop_name' => ['sometimes', 'required', 'string', 'max:255'],
+            'nearest_city' => ['sometimes', 'required', 'string', 'max:100'],
+            'shop_address' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'contact_number' => ['sometimes', 'required', 'string', 'max:15'],
+            'whatsapp_number' => ['sometimes', 'nullable', 'string', 'max:15'],
+            'short_description' => ['sometimes', 'required', 'string', 'max:1000'],
+            'long_description' => ['sometimes', 'nullable', 'string', 'max:10000'],
+            'locations' => ['sometimes', 'nullable', 'array'],
+            'shopImage' => ['sometimes', 'nullable', 'array', 'max:5'],
+            'shopImage.*' => ['sometimes', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048'],
+            'removedImages' => ['sometimes', 'array'],
+            'removedImages.*' => ['sometimes', 'integer', 'exists:shop_images,id']
         ]);
 
-        // Handle image updates
-        if ($request->hasFile('shopImage')) {
-            // Delete existing images from storage
-            foreach ($existingImages as $oldImage) {
-                \Storage::disk('public')->delete($oldImage);
+        DB::beginTransaction();
+
+        try {
+            // Handle removed images FIRST
+            if ($request->has('removedImages') && !empty($request->removedImages)) {
+                $removedImages = ShopImage::where('shop_id', $shop->id)
+                    ->whereIn('id', $request->removedImages)
+                    ->get();
+
+                foreach ($removedImages as $image) {
+                    // Delete from storage
+                    if (Storage::disk('public')->exists($image->image_path)) {
+                        Storage::disk('public')->delete($image->image_path);
+                    }
+                    // Delete from database
+                    $image->delete();
+                }
             }
-            // Store new images
-            $newImages = [];
-            foreach ($request->file('shopImage') as $image) {
-                $path = $image->store('shops', 'public');
-                $newImages[] = $path;
+
+            // Handle new image uploads with shop-specific folder
+            if ($request->hasFile('shopImage')) {
+                $this->processImages($shop, $request->file('shopImage'));
             }
-            $shop->shopImage = $newImages;
-        } elseif ($request->input('remove_images') === 'true') {
-            // Explicit request to remove all images
-            foreach ($existingImages as $oldImage) {
-                \Storage::disk('public')->delete($oldImage);
-            }
-            $shop->shopImage = [];
-        }
+
+            $shop->locations = $request->has('locations') ? $request->locations : null;
         
-        // Update other fields
-        $shop->fill($request->only([
-            'shopName', 'shopAddress', 'description'
-        ]));
+            // Update shop fields
+            $shop->fill($request->only([
+                'shop_name', 'nearest_city', 'shop_address', 'contact_number',
+                'whatsapp_number', 'short_description', 'long_description'
+            ]));
 
-        if ($request->has('locations')) {
-            $shop->locations = $request->locations;
+            $shop->save();
+
+            // Reorder images to maintain consistent indexing
+            $this->reorderImages($shop->id);
+
+            DB::commit();
+
+            // Refresh with images
+            $shop->load('images');
+
+            return response()->json([
+                'message' => 'Shop updated successfully!',
+                'shop' => $shop
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to update shop: ' . $e->getMessage()], 500);
         }
-
-        $shop->save();
-
-        return response()->json([
-            'message' => 'Shop updated successfully!',
-            'shop' => $shop->fresh()
-        ]);
     }
 
     public function destroy($id)
     {
-        $shop = Shop::findOrFail($id);
+        $shop = Shop::with('images')->findOrFail($id);
 
-        // Delete associated images
-        $images = $shop->shopImage ?? [];
-        foreach ($images as $image) {
-            \Storage::disk('public')->delete($image);
+        DB::beginTransaction();
+
+        try {
+            // Delete the entire shop folder from storage
+            $shopFolder = "shops/{$shop->id}";
+            if (Storage::disk('public')->exists($shopFolder)) {
+                Storage::disk('public')->deleteDirectory($shopFolder);
+            }
+
+            // Delete associated images from database
+            $shop->images()->delete();
+            
+            $shop->delete();
+
+            DB::commit();
+
+            return response()->json(['message' => 'Shop deleted successfully!']);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to delete shop: ' . $e->getMessage()], 500);
         }
-
-        $shop->delete();
-
-        return response()->json(['message' => 'Shop deleted successfully!']);
     }
 
     // User side methods
     public function getByAuthenticatedOwner(Request $request)
     {
         $shopOwner = ShopOwner::where('user_id', $request->user()->id)->firstOrFail();
-        $shops = Shop::where('shop_owner_id', $shopOwner->id)->get();
+        $shops = Shop::with('images')->where('shop_owner_id', $shopOwner->id)->get();
         
         return response()->json($shops);
     }
@@ -130,116 +185,219 @@ class ShopController extends Controller
         $shopOwner = ShopOwner::where('user_id', $request->user()->id)->firstOrFail();
 
         $request->validate([
-            'shopName' => 'required|string|max:255',
-            'shopAddress' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'locations' => 'nullable|array',
-            'shopImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'shop_name' => ['required', 'string', 'max:255'],
+            'nearest_city' => ['required', 'string', 'max:100'],
+            'shop_address' => ['nullable', 'string', 'max:500'],
+            'contact_number' => ['required', 'string', 'max:15'],
+            'whatsapp_number' => ['nullable', 'string', 'max:15'],
+            'short_description' => ['required', 'string', 'max:1000'],
+            'long_description' => ['nullable', 'string', 'max:10000'],
+            'locations' => ['nullable', 'array'],
+            'shop_owner_id' => ['required', 'exists:shop_owners,id'],
+            'user_id' => ['required', 'exists:users,id'],
+            'shopImage' => ['nullable', 'array', 'max:5'],
+            'shopImage.*' => ['image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048']
         ]);
 
-        $images = [];
-        if ($request->hasFile('shopImage')) {
-            foreach ($request->file('shopImage') as $image) {
-                $path = $image->store('shops', 'public'); 
-                $images[] = $path;
+        DB::beginTransaction();
+
+        try {
+            // Create shop
+            $shop = Shop::create([
+                'shop_name' => $request->shop_name,
+                'nearest_city' => $request->nearest_city,
+                'shop_address' => $request->shop_address,
+                'contact_number' => $request->contact_number,
+                'whatsapp_number' => $request->whatsapp_number,
+                'short_description' => $request->short_description,
+                'long_description' => $request->long_description,
+                'locations' => $request->locations,
+                'shop_owner_id' => $request->shop_owner_id,
+                'user_id' => $request->user_id
+            ]);
+
+            // Handle image uploads with shop-specific folder
+            if ($request->hasFile('shopImage')) {
+                $this->processImages($shop, $request->file('shopImage'));
             }
+
+            DB::commit();
+
+            // Load images for response
+            $shop->load('images');
+
+            return response()->json([
+                'message' => 'Shop created successfully!',
+                'shop' => $shop
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to create shop: ' . $e->getMessage()], 500);
         }
-
-        $shop = Shop::create([
-            'shopName' => $request->shopName,
-            'shopAddress' => $request->shopAddress,
-            'description' => $request->description,
-            'shopImage' => $images,
-            'locations' => $request->locations,
-            'user_id' => $request->user()->id,
-            'shop_owner_id' => $shopOwner->id
-        ]);
-
-        return response()->json([
-            'message' => 'Shop created successfully!',
-            'shop' => $shop
-        ]);
     }
 
     public function updateByAuthenticatedOwner(Request $request, $id)
     {
         $shopOwner = ShopOwner::where('user_id', $request->user()->id)->firstOrFail();
-        $shop = Shop::where('id', $id)
+        $shop = Shop::with('images')
                     ->where('shop_owner_id', $shopOwner->id)
-                    ->firstOrFail();
-        
-        $existingImages = $shop->shopImage ?? [];
+                    ->findOrFail($id);
 
         $validated = $request->validate([
-            'shopName' => 'sometimes|required|string|max:255',
-            'shopAddress' => 'sometimes|required|string|max:255',
-            'description' => 'nullable|string',
-            'locations' => 'nullable|array',
-            'shopImage.*' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'shop_name' => ['sometimes', 'required', 'string', 'max:255'],
+            'nearest_city' => ['sometimes', 'required', 'string', 'max:100'],
+            'shop_address' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'contact_number' => ['sometimes', 'required', 'string', 'max:15'],
+            'whatsapp_number' => ['sometimes', 'nullable', 'string', 'max:15'],
+            'short_description' => ['sometimes', 'required', 'string', 'max:1000'],
+            'long_description' => ['sometimes', 'nullable', 'string', 'max:10000'],
+            'locations' => ['sometimes', 'nullable', 'array'],
+            'shopImage' => ['sometimes', 'nullable', 'array', 'max:5'],
+            'shopImage.*' => ['sometimes', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048'],
+            'removedImages' => ['sometimes', 'array'],
+            'removedImages.*' => ['sometimes', 'integer', 'exists:shop_images,id']
         ]);
 
-        // Handle image updates
-        if ($request->hasFile('shopImage')) {
-            // Delete existing images from storage
-            foreach ($existingImages as $oldImage) {
-                Storage::disk('public')->delete($oldImage);
+        DB::beginTransaction();
+
+        try {
+            // Handle removed images FIRST
+            if ($request->has('removedImages') && !empty($request->removedImages)) {
+                $removedImages = ShopImage::where('shop_id', $shop->id)
+                    ->whereIn('id', $request->removedImages)
+                    ->get();
+
+                foreach ($removedImages as $image) {
+                    // Delete from storage
+                    if (Storage::disk('public')->exists($image->image_path)) {
+                        Storage::disk('public')->delete($image->image_path);
+                    }
+                    // Delete from database
+                    $image->delete();
+                }
             }
-            // Store new images
-            $newImages = [];
-            foreach ($request->file('shopImage') as $image) {
-                $path = $image->store('shops', 'public');
-                $newImages[] = $path;
+
+            // Handle new image uploads with shop-specific folder
+            if ($request->hasFile('shopImage')) {
+                $this->processImages($shop, $request->file('shopImage'));
             }
-            $shop->shopImage = $newImages;
-        } elseif ($request->input('remove_images') === 'true') {
-            // Explicit request to remove all images
-            foreach ($existingImages as $oldImage) {
-                Storage::disk('public')->delete($oldImage);
-            }
-            $shop->shopImage = [];
-        }
+
+            $shop->locations = $request->has('locations') ? $request->locations : null;
         
-        // Update other fields
-        $shop->fill($request->only([
-            'shopName', 'shopAddress', 'description'
-        ]));
+            // Update shop fields
+            $shop->fill($request->only([
+                'shop_name', 'nearest_city', 'shop_address', 'contact_number',
+                'whatsapp_number', 'short_description', 'long_description'
+            ]));
 
-        if ($request->has('locations')) {
-            $shop->locations = $request->locations;
+            $shop->save();
+
+            // Reorder images to maintain consistent indexing
+            $this->reorderImages($shop->id);
+
+            DB::commit();
+
+            // Refresh with images
+            $shop->load('images');
+
+            return response()->json([
+                'message' => 'Shop updated successfully!',
+                'shop' => $shop
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to update shop: ' . $e->getMessage()], 500);
         }
-
-        $shop->save();
-
-        return response()->json([
-            'message' => 'Shop updated successfully!',
-            'shop' => $shop->fresh()
-        ]);
     }
 
     public function deleteByAuthenticatedOwner(Request $request, $id)
     {
         $shopOwner = ShopOwner::where('user_id', $request->user()->id)->firstOrFail();
-        $shop = Shop::where('id', $id)
+        $shop = Shop::with('images')
                     ->where('shop_owner_id', $shopOwner->id)
-                    ->firstOrFail();
+                    ->findOrFail($id);
         
-        // Delete associated images
-        $images = $shop->shopImage ?? [];
-        foreach ($images as $image) {
-            \Storage::disk('public')->delete($image);
+        DB::beginTransaction();
+
+        try {
+            // Delete the entire shop folder from storage
+            $shopFolder = "shops/{$shop->id}";
+            if (Storage::disk('public')->exists($shopFolder)) {
+                Storage::disk('public')->deleteDirectory($shopFolder);
+            }
+
+            // Delete associated images from database
+            $shop->images()->delete();
+            
+            $shop->delete();
+
+            DB::commit();
+
+            return response()->json(['message' => 'Shop deleted successfully!']);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to delete shop: ' . $e->getMessage()], 500);
+        }
+    }
+
+    // Process and store images for a shop in shop-specific folder
+    private function processImages(Shop $shop, array $images)
+    {
+        $currentCount = $shop->images()->count();
+
+        // Validate image count (max 5)
+        if (($currentCount + count($images)) > 5) {
+            throw new \Exception('Maximum 5 images allowed. Current: ' . $currentCount);
         }
 
-        $shop->delete();
+        $orderIndex = $shop->images()->max('order_index') ?? -1;
 
-        return response()->json(['message' => 'Shop deleted successfully!']);
+        foreach ($images as $image) {
+            $orderIndex++;
+
+            // Store in shop-specific folder: shop/{id}/filename.jpg
+            $folder = "shops/{$shop->id}";
+            $filename = $this->generateUniqueFilename($image, $orderIndex);
+            $path = $image->storeAs($folder, $filename, 'public');
+
+            ShopImage::create([
+                'shop_id' => $shop->id,
+                'image_path' => $path,
+                'order_index' => $orderIndex,
+                'alt_text' => "{$shop->shop_name} - Image " . ($orderIndex + 1)
+            ]);
+        }
+    }
+
+    // Generate unique filename to avoid conflicts
+    private function generateUniqueFilename($image, $index)
+    {
+        $extension = $image->getClientOriginalExtension();
+        $timestamp = time();
+        return "image_{$index}_{$timestamp}.{$extension}";
+    }
+
+    // Helper method to reorder images
+    private function reorderImages($shopId)
+    {
+        $images = ShopImage::where('shop_id', $shopId)
+            ->orderBy('order_index')
+            ->get();
+
+        foreach ($images as $index => $image) {
+            $image->update(['order_index' => $index]);
+        }
     }
 
     // Public methods
     public function show($id)
     {
-        $shop = Shop::withCount('reviews')
+        $shop = Shop::with(['images', 'reviews'])
+                    ->withCount('reviews')
                     ->withAvg('reviews', 'rating')
-                    ->with('reviews')
                     ->findOrFail($id);
 
         return response()->json($shop);
@@ -247,9 +405,9 @@ class ShopController extends Controller
 
     public function index()
     {
-        $shops = Shop::withCount('reviews')
+        $shops = Shop::with('images')
+                    ->withCount('reviews')
                     ->withAvg('reviews', 'rating')
-                    ->with('reviews')
                     ->get();
 
         return response()->json($shops);
@@ -257,13 +415,19 @@ class ShopController extends Controller
 
     public function getByOwner($ownerId)
     {
-        $shops = Shop::where('shop_owner_id', $ownerId)->get();
+        $shops = Shop::with('images')
+                    ->where('shop_owner_id', $ownerId)
+                    ->get();
+
         return response()->json($shops);
     }
 
     public function getByLocation($location)
     {
-        $shops = Shop::whereJsonContains('locations', $location)->get();
+        $shops = Shop::with('images')
+                    ->whereJsonContains('locations', $location)
+                    ->get();
+
         return response()->json($shops);
     }
 }
