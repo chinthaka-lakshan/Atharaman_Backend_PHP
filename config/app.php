@@ -2,6 +2,9 @@
 
 use Illuminate\Support\Facades\Facade;
 
+
+
+
 return [
 
     /*
@@ -14,6 +17,8 @@ return [
     | any other location as required by the application or its packages.
     |
     */
+
+    'frontend_url' => env('FRONTEND_URL', 'http://localhost:5173'),
 
     'name' => env('APP_NAME', 'Laravel'),
 
