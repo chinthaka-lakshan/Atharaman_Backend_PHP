@@ -188,6 +188,16 @@ class HotelOwnerController extends Controller
             'whatsapp_number' => ['sometimes', 'nullable', 'string', 'max:15']
         ]);
 
+        // Check if NIC already exists in hotel_owners table (excluding current hotel owner)
+        if ($request->has('hotel_owner_nic') && $request->hotel_owner_nic !== $hotelOwner->hotel_owner_nic) {
+            $existingHotelOwner = HotelOwner::where('hotel_owner_nic', $request->hotel_owner_nic)
+                ->where('id', '!=', $id)
+                ->first();
+            if ($existingHotelOwner) {
+                return response()->json(['error' => 'This NIC is already registered as a hotel owner in our system'], 422);
+            }
+        }
+
         DB::beginTransaction();
 
         try {

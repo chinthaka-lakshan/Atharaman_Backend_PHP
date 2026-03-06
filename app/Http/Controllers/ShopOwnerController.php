@@ -188,6 +188,16 @@ class ShopOwnerController extends Controller
             'whatsapp_number' => ['sometimes', 'nullable', 'string', 'max:15']
         ]);
 
+        // Check if NIC already exists in shop_owners table (excluding current shop owner)
+        if ($request->has('shop_owner_nic') && $request->shop_owner_nic !== $shopOwner->shop_owner_nic) {
+            $existingShopOwner = ShopOwner::where('shop_owner_nic', $request->shop_owner_nic)
+                ->where('id', '!=', $id)
+                ->first();
+            if ($existingShopOwner) {
+                return response()->json(['error' => 'This NIC is already registered as a shop owner in our system'], 422);
+            }
+        }
+
         DB::beginTransaction();
 
         try {

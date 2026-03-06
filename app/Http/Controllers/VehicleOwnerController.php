@@ -194,6 +194,16 @@ class VehicleOwnerController extends Controller
             'locations' => ['sometimes', 'nullable', 'array']
         ]);
 
+        // Check if NIC already exists in vehicle_owners table (excluding current vehicle owner)
+        if ($request->has('vehicle_owner_nic') && $request->vehicle_owner_nic !== $vehicleOwner->vehicle_owner_nic) {
+            $existingVehicleOwner = VehicleOwner::where('vehicle_owner_nic', $request->vehicle_owner_nic)
+                ->where('id', '!=', $id)
+                ->first();
+            if ($existingVehicleOwner) {
+                return response()->json(['error' => 'This NIC is already registered as a vehicle owner in our system'], 422);
+            }
+        }
+
         DB::beginTransaction();
 
         try {
