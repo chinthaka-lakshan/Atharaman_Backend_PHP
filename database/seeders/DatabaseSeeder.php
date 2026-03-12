@@ -16,6 +16,8 @@ class DatabaseSeeder extends Seeder
      */
     public function run()
     {
+        $this->call(RoleSeeder::class);
+
         User::updateOrCreate(
             ['email' => 'admin@example.com'],
             [

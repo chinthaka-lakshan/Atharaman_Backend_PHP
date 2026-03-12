@@ -21,7 +21,7 @@ return new class extends Migration
             $table->text('long_description')->nullable();
             $table->decimal('price_per_day', 10, 2)->nullable();
             $table->unsignedInteger('mileage_per_day')->nullable();
-            $table->json('locations')->nullable();
+            $table->longText('locations')->nullable();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->foreignId('vehicle_owner_id')->constrained('vehicle_owners')->onDelete('cascade');
             $table->timestamps();
@@ -33,8 +33,8 @@ return new class extends Migration
             $table->index('driver_status');
             $table->index('price_per_day');
             $table->index('mileage_per_day');
-            // Add a generated columns for json arrays
-            $table->string('primary_location')->virtualAs('JSON_UNQUOTE(JSON_EXTRACT(`locations`, "$[0]"))');
+            // primary_location stored as plain column for MySQL compatibility
+            $table->string('primary_location')->nullable();
             $table->index('primary_location');
         });
     }

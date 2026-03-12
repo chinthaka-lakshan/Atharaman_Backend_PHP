@@ -12,7 +12,7 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->foreignId('role_id')->constrained()->onDelete('cascade');
             $table->enum('status', ['pending', 'accepted', 'rejected'])->default('pending');
-            $table->json('extra_data')->nullable();
+            $table->longText('extra_data')->nullable();
             $table->timestamps();
 
             // Unique constraint to prevent duplicate pending requests

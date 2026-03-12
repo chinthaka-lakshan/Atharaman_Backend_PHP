@@ -17,15 +17,15 @@ return new class extends Migration
             $table->string('whatsapp_number', 15)->nullable();
             $table->text('short_description');
             $table->text('long_description')->nullable();
-            $table->json('locations')->nullable();
+            $table->longText('locations')->nullable();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->foreignId('shop_owner_id')->constrained('shop_owners')->onDelete('cascade');
             $table->timestamps();
 
             // Column indexes for better performance
             $table->index('nearest_city');
-            // Add a generated columns for json arrays
-            $table->string('primary_location')->virtualAs('JSON_UNQUOTE(JSON_EXTRACT(`locations`, "$[0]"))');
+            // primary_location stored as plain column for MySQL compatibility
+            $table->string('primary_location')->nullable();
             $table->index('primary_location');
         });
     }

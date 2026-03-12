@@ -18,8 +18,8 @@ return new class extends Migration
             $table->string('itemName');
             $table->string('description')->nullable();
             $table->decimal('price', 10, 2);
-            $table->json('locations')->nullable();
-            $table->json('itemImage')->nullable();
+            $table->longText('locations')->nullable();
+            $table->longText('itemImage')->nullable();
             $table->foreignId('shop_id')->constrained('shops')->onDelete('cascade');
             $table->timestamps();
         });

@@ -17,13 +17,12 @@ return new class extends Migration
             $table->string('business_mail');
             $table->string('contact_number', 15);
             $table->string('whatsapp_number', 15)->nullable();
-            $table->json('locations')->nullable();
+            $table->longText('locations')->nullable();
             $table->foreignId('user_id')->unique()->constrained()->onDelete('cascade');
             $table->timestamps();
 
-            // Column indexes for better performance
-            // Add a generated columns for json arrays
-            $table->string('primary_location')->virtualAs('JSON_UNQUOTE(JSON_EXTRACT(`locations`, "$[0]"))');
+            // primary_location stored as plain column for MySQL compatibility
+            $table->string('primary_location')->nullable();
             $table->index('primary_location');
         });
     }

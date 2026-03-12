@@ -20,17 +20,17 @@ return new class extends Migration
             $table->string('whatsapp_number', 15)->nullable();
             $table->text('short_description');
             $table->text('long_description')->nullable();
-            $table->json('languages')->nullable();
-            $table->json('locations')->nullable();
+            $table->longText('languages')->nullable();
+            $table->longText('locations')->nullable();
             $table->foreignId('user_id')->unique()->constrained()->onDelete('cascade');
+            // Stored as plain columns for MySQL 5.6 / MariaDB < 10.2 compatibility
+            $table->string('primary_language')->nullable();
+            $table->string('primary_location')->nullable();
             $table->timestamps();
 
-            // Column indexes for better performance
+            // Indexes
             $table->index('guide_gender');
-            // Add a generated columns for json arrays
-            $table->string('primary_language')->virtualAs('JSON_UNQUOTE(JSON_EXTRACT(`languages`, "$[0]"))');
             $table->index('primary_language');
-            $table->string('primary_location')->virtualAs('JSON_UNQUOTE(JSON_EXTRACT(`locations`, "$[0]"))');
             $table->index('primary_location');
         });
     }
