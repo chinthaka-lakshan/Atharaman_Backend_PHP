@@ -269,6 +269,16 @@ class GuideController extends Controller
             'removedImages.*' => ['sometimes', 'integer', 'exists:guide_images,id']
         ]);
 
+        // Check if NIC already exists in guides table (excluding current guide)
+        if ($request->has('guide_nic') && $request->guide_nic !== $guide->guide_nic) {
+            $existingGuide = Guide::where('guide_nic', $request->guide_nic)
+                ->where('id', '!=', $guide->id)
+                ->first();
+            if ($existingGuide) {
+                return response()->json(['error' => 'This NIC is already registered as a guide in our system'], 422);
+            }
+        }
+
         DB::beginTransaction();
 
         try {
