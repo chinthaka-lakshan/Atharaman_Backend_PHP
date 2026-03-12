@@ -198,8 +198,6 @@ class HotelController extends Controller
             'short_description' => ['required', 'string', 'max:1000'],
             'long_description' => ['nullable', 'string', 'max:10000'],
             'locations' => ['nullable', 'array'],
-            'hotel_owner_id' => ['required', 'exists:hotel_owners,id'],
-            'user_id' => ['required', 'exists:users,id'],
             'hotelImage' => ['nullable', 'array', 'max:5'],
             'hotelImage.*' => ['image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048']
         ]);
@@ -218,8 +216,8 @@ class HotelController extends Controller
                 'short_description' => $request->short_description,
                 'long_description' => $request->long_description,
                 'locations' => $request->locations,
-                'hotel_owner_id' => $request->hotel_owner_id,
-                'user_id' => $request->user_id
+                'hotel_owner_id' => $hotelOwner->id,
+                'user_id' => $request->user()->id
             ]);
 
             // Handle image uploads with hotel-specific folder
