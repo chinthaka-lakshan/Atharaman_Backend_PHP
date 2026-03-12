@@ -318,6 +318,7 @@ class LocationsController extends Controller
     private function getGuidesByLocation($locationName)
     {
         return Guide::where('locations', 'LIKE', "%{$locationName}%")
+                    ->with('images')
                     ->withCount('reviews')
                     ->withAvg('reviews', 'rating')
                     ->get();
@@ -326,6 +327,7 @@ class LocationsController extends Controller
     private function getShopsByLocation($locationName)
     {
         return Shop::whereJsonContains('locations', $locationName)
+                    ->with('images')
                     ->withCount('reviews')
                     ->withAvg('reviews', 'rating')
                     ->get();
@@ -334,6 +336,7 @@ class LocationsController extends Controller
     private function getHotelsByLocation($locationName)
     {
         return Hotel::whereJsonContains('locations', $locationName)
+                    ->with('images')
                     ->withCount('reviews')
                     ->withAvg('reviews', 'rating')
                     ->get();
@@ -342,6 +345,7 @@ class LocationsController extends Controller
     private function getVehiclesByLocation($locationName)
     {
         return Vehicle::whereJsonContains('locations', $locationName)
+                    ->with('images')
                     ->withCount('reviews')
                     ->withAvg('reviews', 'rating')
                     ->get();
