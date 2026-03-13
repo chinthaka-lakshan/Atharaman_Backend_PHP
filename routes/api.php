@@ -39,6 +39,9 @@ Route::post('/forgot-password', [AuthController::class, 'sendResetLink']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 
 // Public routes
+Route::get('/health', function () {
+    return response()->json(['status' => 'ok', 'message' => 'Backend is working!']);
+});
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/locations', [LocationsController::class, 'index']);
