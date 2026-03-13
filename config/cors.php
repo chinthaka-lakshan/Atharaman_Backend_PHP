@@ -1,5 +1,18 @@
 <?php
 
+$defaultAllowedOrigins = [
+    'http://localhost:5174',
+    'http://localhost:5173',
+    'https://atharaman.vercel.app',
+    'https://atharaman-frontend.vercel.app',
+];
+
+$configuredOrigins = env('CORS_ALLOWED_ORIGINS');
+
+$allowedOrigins = $configuredOrigins
+    ? array_values(array_filter(array_map('trim', explode(',', $configuredOrigins))))
+    : $defaultAllowedOrigins;
+
 return [
 
     /*
@@ -19,7 +32,7 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['http://localhost:5174', 'http://localhost:5173', 'https://atharaman.vercel.app', 'https://atharaman-frontend.vercel.app'],
+    'allowed_origins' => $allowedOrigins,
 
     'allowed_origins_patterns' => [],
 

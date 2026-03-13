@@ -242,8 +242,6 @@ class VehicleController extends Controller
             'price_per_day' => ['nullable', 'numeric', 'min:0'],
             'mileage_per_day' => ['nullable', 'integer', 'min:0'],
             'locations' => ['nullable', 'array'],
-            'vehicle_owner_id' => ['required', 'exists:vehicle_owners,id'],
-            'user_id' => ['required', 'exists:users,id'],
             'vehicleImage' => ['nullable', 'array', 'max:5'],
             'vehicleImage.*' => ['image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048']
         ]);
@@ -274,8 +272,8 @@ class VehicleController extends Controller
                 'price_per_day' => $request->filled('price_per_day') ? $request->price_per_day : null,
                 'mileage_per_day' => $request->filled('mileage_per_day') ? $request->mileage_per_day : null,
                 'locations' => $request->locations,
-                'vehicle_owner_id' => $request->vehicle_owner_id,
-                'user_id' => $request->user_id
+                'vehicle_owner_id' => $vehicleOwner->id,
+                'user_id' => $request->user()->id
             ]);
 
             // Handle image uploads with vehicle-specific folder
