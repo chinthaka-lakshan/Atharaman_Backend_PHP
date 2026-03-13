@@ -6,12 +6,16 @@ on:
       - main
   workflow_dispatch:
 
+# 1. This block is CRITICAL for OIDC (the IDs in your screenshot) to work
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4 # Updated to v4 for Node 24 support
+      - uses: actions/checkout@v4
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -19,21 +23,14 @@ jobs:
           php-version: '8.2'
           extensions: mbstring, xml, ctype, iconv, mysql
 
-      - name: Check if composer.json exists
-        id: check_files
-        uses: andstor/file-existence-action@v3 # Updated to v3
-        with:
-          files: 'composer.json'
-
       - name: Install dependencies
-        if: steps.check_files.outputs.files_exists == 'true'
         run: composer install --ignore-platform-reqs --optimize-autoloader --no-dev
 
       - name: Zip artifact for deployment
         run: zip release.zip ./* -r
 
       - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@v4 # Updated to v4
+        uses: actions/upload-artifact@v4
         with:
           name: php-app
           path: release.zip
@@ -43,20 +40,27 @@ jobs:
     needs: build
     environment:
       name: 'production'
-      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
 
     steps:
       - name: Download artifact from build job
-        uses: actions/download-artifact@v4 # Updated to v4
+        uses: actions/download-artifact@v4
         with:
           name: php-app
 
       - name: Unzip artifact for deployment
         run: unzip release.zip
 
-      - name: 'Deploy to Azure Web App'
-        uses: azure/webapps-deploy@v3 # Updated to v3
-        id: deploy-to-webapp
+      # 2. Login to Azure using the secrets from your screenshot
+      - name: Login to Azure
+        uses: azure/login@v2
         with:
-          app-name: 'atharaman-api' # Ensure this matches your Azure App name
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_XXXXXXXX }} # Don't change the secret name
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_2189B29FE1704E52B62B175562D3960D }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_23AFD8CBD61049EE873952DF8469521A }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_DF21607C7EF447BDAA9B167B2F13E14B }}
+
+      # 3. Deploy without a publish-profile
+      - name: 'Deploy to Azure Web App'
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: 'atharaman-api'
+          package: .
