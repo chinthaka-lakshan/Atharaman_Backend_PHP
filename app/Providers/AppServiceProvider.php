@@ -14,14 +14,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        // Fix public path for InfinityFree (when index.php is in htdocs and code is in a subfolder)
-        if ($this->app->environment('production')) {
-            $this->app->bind('path.public', function() {
-                // If base_path is .../htdocs/Atharaman_Backend_PHP, 
-                // public path should be .../htdocs/
-                return dirname(base_path());
-            });
-        }
+        //
     }
 
     /**
