@@ -6,7 +6,6 @@ on:
       - main
   workflow_dispatch:
 
-# 1. This block is CRITICAL for OIDC (the IDs in your screenshot) to work
 permissions:
   id-token: write
   contents: read
@@ -14,6 +13,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -38,8 +38,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build
-    environment:
-      name: 'production'
 
     steps:
       - name: Download artifact from build job
@@ -50,7 +48,6 @@ jobs:
       - name: Unzip artifact for deployment
         run: unzip release.zip
 
-      # 2. Login to Azure using the secrets from your screenshot
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -58,7 +55,6 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_23AFD8CBD61049EE873952DF8469521A }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_DF21607C7EF447BDAA9B167B2F13E14B }}
 
-      # 3. Deploy without a publish-profile
       - name: 'Deploy to Azure Web App'
         uses: azure/webapps-deploy@v3
         with:
