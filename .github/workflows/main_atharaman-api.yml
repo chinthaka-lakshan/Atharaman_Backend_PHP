@@ -56,10 +56,9 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_2782C85A09A247B19ACE753C7EED532F }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_593C16B3AE744BB2A817CBADCB7900BC }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_DCE85EE020184451831DF58DC1378BFC }}
-
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_XXXXX }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_XXXXX }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_XXXXX }}
       - name: 'Deploy to Azure Web App'
         uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
@@ -67,4 +66,5 @@ jobs:
           app-name: 'atharaman-api'
           slot-name: 'Production'
           package: .
+
           
