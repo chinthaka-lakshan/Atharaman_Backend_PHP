@@ -6,6 +6,7 @@ on:
       - main
   workflow_dispatch:
 
+# THIS BLOCK IS CRITICAL - DO NOT REMOVE
 permissions:
   id-token: write
   contents: read
@@ -58,3 +59,5 @@ jobs:
         with:
           app-name: 'atharaman-api'
           package: .
+          # This forces Azure to recognize the public folder
+          startup-script: 'cp /home/site/wwwroot/public/index.php /home/site/wwwroot/index.php && apache2-foreground'
