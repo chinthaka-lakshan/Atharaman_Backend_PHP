@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\DashboardController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
@@ -75,6 +76,9 @@ Route::get('/website-reviews/recent/{limit?}', [WebsiteReviewController::class, 
 
 // Authenticated routes (any logged-in user)
 Route::middleware(['auth:sanctum'])->group(function () {
+    // Admin Routes
+    Route::get('/admin/dashboard-stats', [DashboardController::class, 'getStats']);
+
     Route::get('/user/profile', [AuthController::class, 'profile']);
     Route::post('/logout', [AuthController::class, 'logout']);
     // Routes for guide of authenticated user

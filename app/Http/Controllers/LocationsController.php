@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Location;
 use App\Models\LocationImage;
-use App\Models\Guides;
+use App\Models\Guide;
 use App\Models\Shop;
 use App\Models\Hotel;
 use App\Models\Vehicle;
@@ -317,7 +317,8 @@ class LocationsController extends Controller
     // Helper methods
     private function getGuidesByLocation($locationName)
     {
-        return Guides::where('locations', 'LIKE', "%{$locationName}%")
+        return Guide::where('locations', 'LIKE', "%{$locationName}%")
+                    ->with('images')
                     ->withCount('reviews')
                     ->withAvg('reviews', 'rating')
                     ->get();
@@ -326,6 +327,7 @@ class LocationsController extends Controller
     private function getShopsByLocation($locationName)
     {
         return Shop::whereJsonContains('locations', $locationName)
+                    ->with('images')
                     ->withCount('reviews')
                     ->withAvg('reviews', 'rating')
                     ->get();
@@ -334,6 +336,7 @@ class LocationsController extends Controller
     private function getHotelsByLocation($locationName)
     {
         return Hotel::whereJsonContains('locations', $locationName)
+                    ->with('images')
                     ->withCount('reviews')
                     ->withAvg('reviews', 'rating')
                     ->get();
@@ -342,6 +345,7 @@ class LocationsController extends Controller
     private function getVehiclesByLocation($locationName)
     {
         return Vehicle::whereJsonContains('locations', $locationName)
+                    ->with('images')
                     ->withCount('reviews')
                     ->withAvg('reviews', 'rating')
                     ->get();
